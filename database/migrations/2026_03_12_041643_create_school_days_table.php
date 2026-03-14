@@ -13,8 +13,9 @@ return new class extends Migration
     {
         Schema::create('school_days', function (Blueprint $table) {
             $table->id();
-            $table->date('date');
+            $table->date('date')->unique();
             $table->string('event_type')-> default('regular');
+            $table->string('event_name')->nullable(); // ADD THIS LINE
             $table->integer('attendance_count')->default(0);
             $table->timestamps();
         });

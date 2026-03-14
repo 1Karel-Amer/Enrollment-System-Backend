@@ -3,19 +3,22 @@
 namespace Database\Seeders;
 
 use App\Models\User;
-// use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
 
 class DatabaseSeeder extends Seeder
 {
-   
+    /**
+     * Seed the application's database.
+     */
     public function run(): void
     {
-        // 1. Create your Login User (So you can still enter the Dashboard)
+        // 1. Create your Login User
+        // This ensures you always have an admin account after a migrate:fresh
         User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'tester@example.com',
-            'password' => bcrypt('password'), // Explicitly set a password
+            'name' => 'Admin User',
+            'email' => 'test@example.com',
+            'password' => Hash::make('password123'),
             'role' => 'admin',
         ]);
 
@@ -25,7 +28,7 @@ class DatabaseSeeder extends Seeder
             CourseSeeder::class,
             StudentSeeder::class,
             SchoolDaySeeder::class,
-            ProgramSeeder::class, // Added here
+            ProgramSeeder::class,
             SubjectSeeder::class,
         ]);
     }
