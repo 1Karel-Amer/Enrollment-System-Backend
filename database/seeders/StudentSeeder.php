@@ -15,7 +15,7 @@ class StudentSeeder extends Seeder
      */
     public function run(): void
     {
-        $faker = Faker::create();
+        $faker = Faker::create('en_PH'); // Using Philippines locale for more realistic local data
         
         // 1. Get all course IDs to assign students to valid courses
         $courseIds = Course::pluck('id')->toArray();
@@ -25,29 +25,46 @@ class StudentSeeder extends Seeder
             return;
         }
 
-        $this->command->info("Seeding 500 students across the last 6 months...");
+        $this->command->info("Seeding 500 students with full demographic data...");
+
+        // Define the possible year levels
+        $yearLevels = ['1st Year', '2nd Year', '3rd Year', '4th Year'];
 
         for ($i = 0; $i < 500; $i++) {
             // 2. Generate a random date within the last 6 months
-            // This ensures your graph has data points for Jan, Feb, Mar, etc.
             $randomDate = $faker->dateTimeBetween('-6 months', 'now');
             $carbonDate = Carbon::instance($randomDate);
 
             Student::create([
+                // Generate a custom Student ID (e.g., 2026-0001)
+                'student_id'      => '2026-' . str_pad($i + 1, 4, '0', STR_PAD_LEFT),
                 'first_name'      => $faker->firstName,
                 'last_name'       => $faker->lastName,
                 'email'           => $faker->unique()->safeEmail,
                 'gender'          => $faker->randomElement(['Male', 'Female']),
                 'date_of_birth'   => $faker->date('Y-m-d', '2005-12-31'),
+                
+                // --- NEW: Added Year Level randomization ---
+                'year_level'      => $faker->randomElement($yearLevels),
+                
+                // --- Demographic Information ---
+                'contact_no'      => $faker->phoneNumber,
+                'address'         => $faker->address,
+                
+                // Emergency Contact Info
+                'emergency_contact_name' => $faker->name,
+                'emergency_contact_no'   => $faker->phoneNumber,
+                // -------------------------------
+
                 'course_id'       => $faker->randomElement($courseIds),
                 
-                // 3. Sync all date columns so the backend query finds them
+                // 3. Sync all date columns for your dashboard charts
                 'enrollment_date' => $carbonDate->format('Y-m-d'),
                 'created_at'      => $carbonDate, 
                 'updated_at'      => $carbonDate,
             ]);
         }
 
-        $this->command->info("Student Seeding Completed!");
+        $this->command->info("Student Seeding Completed with 500 records!");
     }
 }

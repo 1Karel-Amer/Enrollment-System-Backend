@@ -14,7 +14,9 @@ class DatabaseSeeder extends Seeder
         // 1. Create your Login User (So you can still enter the Dashboard)
         User::factory()->create([
             'name' => 'Test User',
-            'email' => 'test@example.com',
+            'email' => 'tester@example.com',
+            'password' => bcrypt('password'), // Explicitly set a password
+            'role' => 'admin',
         ]);
 
         // 2. Run the specific enrollment system seeders in order
