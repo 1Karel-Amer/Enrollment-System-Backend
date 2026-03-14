@@ -7,41 +7,53 @@ use App\Models\Course;
 use App\Models\SchoolDay;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class DashboardController extends Controller
 {
     public function index()
     {
-        // 1. Fetch real data
-        $enrollmentData = Student::select(
-            DB::raw('MONTH(created_at) as month'), 
-            DB::raw('count(*) as count')
-        )->groupBy('month')->get();
+        // 1. Fetch Enrollment Trends (Last 6 Months)
+        $rawEnrollment = Student::select(
+                DB::raw('MONTH(created_at) as month_num'), 
+                DB::raw('count(*) as count')
+            )
+            ->where('created_at', '>=', now()->subMonths(5)->startOfMonth())
+            ->groupBy('month_num')
+            ->get();
 
+        // Generate a continuous 6-month array so the chart isn't empty-looking
+        $enrollmentData = collect(range(0, 5))->map(function ($i) use ($rawEnrollment) {
+            $monthDate = now()->subMonths(5 - $i);
+            $monthNumber = $monthDate->month;
+            
+            // Find if we have database records for this specific month
+            $match = $rawEnrollment->firstWhere('month_num', $monthNumber);
+
+            return [
+                'month' => $monthDate->format('M'), // Returns "Jan", "Feb", etc.
+                'count' => $match ? $match->count : 0
+            ];
+        });
+
+        // 2. Fetch Course Distribution
         $courseData = Course::withCount('students as students_count')->get();
 
+        // 3. Fetch Attendance Patterns
         $attendanceData = SchoolDay::select('date', 'attendance_count')
             ->orderBy('date', 'asc')
             ->get();
 
-        // 2. Fallback Logic: If database is empty, send dummy data so charts aren't blank
         return response()->json([
-            'enrollment_trends' => $enrollmentData->isEmpty() ? [
-                ['month' => 1, 'count' => 10],
-                ['month' => 2, 'count' => 25],
-                ['month' => 3, 'count' => 15]
-            ] : $enrollmentData,
+            'enrollment_trends' => $enrollmentData,
 
             'course_distribution' => $courseData->isEmpty() ? [
-                ['name' => 'BSIT', 'students_count' => 45],
-                ['name' => 'BSCS', 'students_count' => 30],
-                ['name' => 'BSIS', 'students_count' => 20]
+                ['name' => 'BSIT', 'students_count' => 0],
+                ['name' => 'BSCS', 'students_count' => 0],
             ] : $courseData,
 
             'attendance_patterns' => $attendanceData->isEmpty() ? [
-                ['date' => '2026-03-01', 'attendance_count' => 85],
-                ['date' => '2026-03-02', 'attendance_count' => 92],
-                ['date' => '2026-03-03', 'attendance_count' => 78]
+                ['date' => now()->toDateString(), 'attendance_count' => 0],
             ] : $attendanceData,
         ]);
     }

@@ -14,12 +14,12 @@ return new class extends Migration
         Schema::create('programs', function (Blueprint $table) {
             $table->id();
             $table->string('code');        // Make sure this exists!
-        $table->string('name');
-        $table->string('type');
-        $table->string('duration');
-        $table->integer('units');
-        $table->string('status');
-        $table->text('description')->nullable();
+            $table->string('name');
+            $table->string('type');
+            $table->string('duration');
+            $table->integer('units');
+            $table->string('status');
+            $table->text('description')->nullable();
             $table->timestamps();
         });
     }
