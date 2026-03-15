@@ -7,19 +7,27 @@ use Illuminate\Http\Request;
 
 class StudentController extends Controller
 {
-   public function index(Request $request)
-{
-    $query = Student::with('course');
+    public function index(Request $request)
+    {
+        // with('course') ensures we get the course name, not just the ID
+        $query = Student::with('course');
 
-    // If there is a search term, filter by ID or Name
-    if ($request->has('search')) {
-        $search = $request->query('search');
-        $query->where('student_id', 'LIKE', "%{$search}%")
-              ->orWhere('first_name', 'LIKE', "%{$search}%")
-              ->orWhere('last_name', 'LIKE', "%{$search}%");
+        if ($request->has('search')) {
+            $search = $request->query('search');
+            $query->where(function($q) use ($search) {
+                $q->where('student_id', 'LIKE', "%{$search}%")
+                  ->orWhere('first_name', 'LIKE', "%{$search}%")
+                  ->orWhere('last_name', 'LIKE', "%{$search}%");
+            });
+        }
+
+        // Returns paginated data including the course relationship
+        return response()->json($query->paginate(15));
     }
 
-    // Return paginated results (15 per page)
-    return response()->json($query->paginate(15));
-}
+    public function show($id)
+    {
+        $student = Student::with('course')->findOrFail($id);
+        return response()->json($student);
+    }
 }

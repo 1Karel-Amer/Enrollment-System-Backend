@@ -29,7 +29,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // 2. University Modules (Programs & Subjects)
     Route::get('/programs', [ProgramController::class, 'index']); // Now accessible!
+   Route::get('/programs/{id}', [ProgramController::class, 'show']); // ADD THIS LINE
     Route::get('/subjects', [SubjectController::class, 'index']); // Now accessible!
+
     
     // 3. Student Module
     Route::get('/students', [StudentController::class, 'index']);

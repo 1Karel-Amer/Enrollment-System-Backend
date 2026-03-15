@@ -3,9 +3,22 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Program extends Model
 {
-    // This tells Laravel which columns you are allowed to save
-    protected $fillable = ['code', 'name', 'type', 'duration', 'units', 'status', 'description'];
+    protected $fillable = [
+        'code',
+        'name',
+        'type',
+        'duration',
+        'units',
+        'status',
+        'description'
+    ];
+
+    public function subjects(): HasMany
+    {
+        return $this->hasMany(Subject::class, 'program', 'code');
+    }
 }

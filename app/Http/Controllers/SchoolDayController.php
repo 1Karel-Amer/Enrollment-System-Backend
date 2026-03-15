@@ -9,7 +9,7 @@ class SchoolDayController extends Controller
 {
     public function index()
     {
-        // Fetch all calendar data to send to the React frontend
+        
         return response()->json(SchoolDay::orderBy('date', 'asc')->get());
     }
 }

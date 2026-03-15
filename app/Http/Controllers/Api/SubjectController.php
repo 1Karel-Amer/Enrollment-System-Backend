@@ -4,12 +4,27 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Subject;
+use Illuminate\Http\Request;
 
 class SubjectController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        // Limiting columns makes the "Size" in your Network tab much smaller
-        return response()->json(Subject::select('id', 'subject_code', 'description')->get());
+        $query = Subject::query();
+
+        if ($request->filled('program')) {
+            $query->where('program', $request->program);
+        }
+
+        if ($request->filled('year')) {
+            $query->where('year', $request->year);
+        }
+
+        return response()->json($query->get());
+    }
+
+    public function show($id)
+    {
+        return response()->json(Subject::findOrFail($id));
     }
 }

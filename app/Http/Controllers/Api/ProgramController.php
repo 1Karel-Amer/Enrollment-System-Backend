@@ -4,12 +4,19 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Program;
+use Illuminate\Http\Request;
 
 class ProgramController extends Controller
 {
     public function index()
     {
-        // select() ensures we aren't downloading heavy, unused columns
-        return response()->json(Program::select('id', 'name')->get());
+        return response()->json(Program::all());
+    }
+
+    public function show($id)
+    {
+        $program = Program::with('subjects')->findOrFail($id);
+
+        return response()->json($program);
     }
 }
