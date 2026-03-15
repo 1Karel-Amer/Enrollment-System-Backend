@@ -54,7 +54,13 @@ class DashboardController extends Controller
         });
 
         // 3. Course Distribution
-        $courseData = Course::withCount('students as students_count')->get();
+        // FIX: Mapping the collection to ensure React gets integers and guaranteed names
+        $courseData = Course::withCount('students')->get()->map(function ($course) {
+            return [
+                'name' => $course->name ?? $course->course_name ?? 'Unknown Program',
+                'students_count' => (int) $course->students_count
+            ];
+        });
 
         // 4. Attendance Patterns
         $attendanceData = SchoolDay::select('date', 'attendance_count')
