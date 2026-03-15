@@ -18,10 +18,13 @@ return new class extends Migration
             $table->integer('units');
             $table->string('year');
             $table->string('term');
-            $table->string('program'); // The program code (e.g., BSIT)
+            $table->string('program'); 
             $table->string('preReq')->nullable();
             $table->text('description')->nullable();
             $table->timestamps();
+            
+            // Add this line for the "Archive" functionality
+            $table->softDeletes(); 
         });
     }
 

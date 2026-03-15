@@ -32,8 +32,32 @@ class Student extends Model
         'enrollment_date' => 'date'
     ];
 
+    /*
+    |--------------------------------------------------------------------------
+    | RELATIONSHIPS
+    |--------------------------------------------------------------------------
+    */
+
+    // Student belongs to a course
     public function course()
     {
         return $this->belongsTo(Course::class);
+    }
+
+    // Student enrollments
+    public function enrollments()
+    {
+        return $this->hasMany(Enrollment::class);
+    }
+
+    // Subjects the student is enrolled in
+    public function subjects()
+    {
+        return $this->belongsToMany(
+            Subject::class,
+            'enrollments',
+            'student_id',
+            'subject_id'
+        )->withTimestamps();
     }
 }

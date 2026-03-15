@@ -27,11 +27,14 @@ Route::middleware('auth:sanctum')->group(function () {
         return response()->json(['message' => 'Logged out']);
     });
 
-    // 2. University Modules (Programs & Subjects)
-    Route::get('/programs', [ProgramController::class, 'index']); // Now accessible!
-   Route::get('/programs/{id}', [ProgramController::class, 'show']); // ADD THIS LINE
-    Route::get('/subjects', [SubjectController::class, 'index']); // Now accessible!
-
+    // 2. University Modules
+    Route::get('/programs', [ProgramController::class, 'index']);
+    Route::get('/programs/{id}', [ProgramController::class, 'show']);
+    
+    // SUBJECT ROUTES - Added POST and DELETE
+    Route::get('/subjects', [SubjectController::class, 'index']);
+    Route::post('/subjects', [SubjectController::class, 'store']);    // Required to save new subjects
+    Route::delete('/subjects/{id}', [SubjectController::class, 'destroy']); // Required to archive
     
     // 3. Student Module
     Route::get('/students', [StudentController::class, 'index']);

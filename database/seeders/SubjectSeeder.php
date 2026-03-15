@@ -9,29 +9,47 @@ class SubjectSeeder extends Seeder
 {
     public function run(): void
     {
-        $subjects = [
-            // BS INFORMATION TECHNOLOGY
-            ["code" => "IT101", "title" => "Intro to Computing", "units" => 3, "year" => "1st Year", "term" => "1st Semester", "program" => "BSIT"],
-            
-            // BS CIVIL ENGINEERING
-            ["code" => "MATH111", "title" => "Differential Calculus", "units" => 3, "year" => "1st Year", "term" => "1st Semester", "program" => "BSCE"],
-            ["code" => "MATH111-B", "title" => "Differential Calculus", "units" => 3, "year" => "1st Year", "term" => "1st Semester", "program" => "BS Civil Engineering"],
-
-            // BS CRIMINOLOGY
-            ["code" => "CRIM1", "title" => "Intro to Criminology", "units" => 3, "year" => "1st Year", "term" => "1st Semester", "program" => "BSCrim"],
-            ["code" => "CRIM1-B", "title" => "Intro to Criminology", "units" => 3, "year" => "1st Year", "term" => "1st Semester", "program" => "BS Criminology"],
-
-            // BS ACCOUNTANCY
-            ["code" => "ACC101", "title" => "Financial Accounting 1", "units" => 6, "year" => "1st Year", "term" => "1st Semester", "program" => "BSA"],
-            ["code" => "ACC101-B", "title" => "Financial Accounting 1", "units" => 6, "year" => "1st Year", "term" => "1st Semester", "program" => "BS Accountancy"],
-
-            // BS PSYCHOLOGY
-            ["code" => "PSY101", "title" => "General Psychology", "units" => 3, "year" => "1st Year", "term" => "1st Semester", "program" => "BSPsych"],
-            ["code" => "PSY101-B", "title" => "General Psychology", "units" => 3, "year" => "1st Year", "term" => "1st Semester", "program" => "BS Psychology"],
+        $programs = [
+            'BSIT' => 'BS Information Technology',
+            'BSCS' => 'BS Computer Science',
+            'BSCE' => 'BS Civil Engineering',
+            'BSCrim' => 'BS Criminology',
+            'BSA' => 'BS Accountancy',
+            'BSPsych' => 'BS Psychology'
         ];
 
-        foreach ($subjects as $s) {
-            Subject::updateOrCreate(['code' => $s['code']], $s);
+        $years = ['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year'];
+        $terms = ['1st Semester', '2nd Semester'];
+
+        foreach ($programs as $code => $fullName) {
+            foreach ($years as $year) {
+                // Skip 5th year for non-engineering
+                if ($year === '5th Year' && $code !== 'BSCE') continue;
+
+                foreach ($terms as $term) {
+                    // Create 2 subjects per semester per year
+                    for ($i = 1; $i <= 2; $i++) {
+                        $sCode = $code . "-" . substr($year, 0, 1) . ($term[0]) . $i;
+                        
+                        $data = [
+                            "code" => $sCode,
+                            "title" => "$fullName Major $i (" . substr($year, 0, 3) . " " . substr($term, 0, 3) . ")",
+                            "units" => ($code === 'BSA') ? 6 : 3,
+                            "year" => $year,
+                            "term" => $term,
+                            "program" => $code, // Primary code
+                            "description" => "Core subject for $fullName students."
+                        ];
+
+                        Subject::updateOrCreate(['code' => $data['code']], $data);
+
+                        // Also create a duplicate for the "Full Name" variant to fix your UI mismatch
+                        $data['code'] = $sCode . "-ALT";
+                        $data['program'] = $fullName;
+                        Subject::updateOrCreate(['code' => $data['code']], $data);
+                    }
+                }
+            }
         }
     }
 }
