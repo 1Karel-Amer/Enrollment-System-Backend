@@ -11,6 +11,13 @@ A full-stack enrollment management system.
 
 ## Setup Instructions
 
+## Access Credentials
+
+For testing purposes, you can use the following default account:
+
+- **Email:** `test@example.com`
+- **Password:** `password123`
+
 ### 1. Clone & Prepare
 
 1. Clone this repository to your local machine.
