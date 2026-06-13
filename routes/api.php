@@ -10,6 +10,8 @@ use App\Http\Controllers\WeatherController;
 use App\Http\Controllers\SchoolDayController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
+use App\Models\Student;
+
 
 // --- AUTHENTICATION ---
 Route::post('/login', [AuthController::class, 'login'])->name('login');
@@ -17,6 +19,8 @@ Route::post('/login', [AuthController::class, 'login'])->name('login');
 // --- PUBLIC ROUTES ---
 Route::get('/dashboard-stats', [DashboardController::class, 'index']);
 Route::get('/weather/{city}', [WeatherController::class, 'getWeather']);
+Route::get('/students/{id}/predict-risk', [StudentController::class, 'predictDropoutRisk']);
+
 
 // --- PROTECTED ROUTES ---
 Route::middleware('auth:sanctum')->group(function () {
@@ -38,6 +42,8 @@ Route::middleware('auth:sanctum')->group(function () {
     
     // 3. Student Module
     Route::get('/students', [StudentController::class, 'index']);
+  
+   
     
     // 4. Course Module
     Route::get('/courses', [CourseController::class, 'index']);

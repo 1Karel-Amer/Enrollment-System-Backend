@@ -23,7 +23,9 @@ class Student extends Model
         'emergency_contact_name',
         'emergency_contact_no',
         'course_id',
-        'enrollment_date'
+        'enrollment_date',
+        'gpa',        
+        'attendance'
 
     ];
 
@@ -32,13 +34,7 @@ class Student extends Model
         'enrollment_date' => 'date'
     ];
 
-    /*
-    |--------------------------------------------------------------------------
-    | RELATIONSHIPS
-    |--------------------------------------------------------------------------
-    */
-
-    // Student belongs to a course
+    
     public function course()
     {
         return $this->belongsTo(Course::class);
