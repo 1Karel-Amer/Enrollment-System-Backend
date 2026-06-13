@@ -19,7 +19,7 @@ return new class extends Migration
                 $table->string('email')->unique();
                 $table->string('gender');
                 $table->date('date_of_birth');
-                $table->string('year_level'); /
+                $table->string('year_level'); 
                 $table->string('contact_no');
                 $table->text('address');
         
@@ -34,9 +34,7 @@ return new class extends Migration
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
+    
     public function down(): void
     {
         Schema::dropIfExists('students');
