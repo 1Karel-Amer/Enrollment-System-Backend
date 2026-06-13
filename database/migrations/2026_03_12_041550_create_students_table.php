@@ -19,11 +19,11 @@ return new class extends Migration
                 $table->string('email')->unique();
                 $table->string('gender');
                 $table->date('date_of_birth');
-                $table->string('year_level'); // <--- ADD THIS LINE
+                $table->string('year_level'); /
                 $table->string('contact_no');
                 $table->text('address');
         
-                // Emergency Contact Fields
+               
                 $table->string('emergency_contact_name'); 
                 $table->string('emergency_contact_no');
 

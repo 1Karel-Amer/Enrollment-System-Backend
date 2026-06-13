@@ -13,7 +13,7 @@ class DashboardController extends Controller
 {
     public function index()
     {
-        // 1. Summary Stats (The "Big Numbers")
+       
         $summary = [
             [
                 'label' => 'Total Enrollment',
@@ -35,7 +35,7 @@ class DashboardController extends Controller
             ],
         ];
 
-        // 2. Enrollment Trends (Last 6 Months)
+      
         $rawEnrollment = Student::select(
                 DB::raw('MONTH(created_at) as month_num'), 
                 DB::raw('count(*) as count')
@@ -53,8 +53,7 @@ class DashboardController extends Controller
             ];
         });
 
-        // 3. Course Distribution
-        // FIX: Mapping the collection to ensure React gets integers and guaranteed names
+      
         $courseData = Course::withCount('students')->get()->map(function ($course) {
             return [
                 'name' => $course->name ?? $course->course_name ?? 'Unknown Program',
@@ -62,7 +61,6 @@ class DashboardController extends Controller
             ];
         });
 
-        // 4. Attendance Patterns
         $attendanceData = SchoolDay::select('date', 'attendance_count')
             ->orderBy('date', 'asc')
             ->take(10)

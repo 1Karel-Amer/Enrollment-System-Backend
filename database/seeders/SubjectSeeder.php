@@ -27,7 +27,7 @@ class SubjectSeeder extends Seeder
                 if ($year === '5th Year' && $code !== 'BSCE') continue;
 
                 foreach ($terms as $term) {
-                    // Create 2 subjects per semester per year
+                 
                     for ($i = 1; $i <= 2; $i++) {
                         $sCode = $code . "-" . substr($year, 0, 1) . ($term[0]) . $i;
                         
@@ -37,13 +37,12 @@ class SubjectSeeder extends Seeder
                             "units" => ($code === 'BSA') ? 6 : 3,
                             "year" => $year,
                             "term" => $term,
-                            "program" => $code, // Primary code
+                            "program" => $code,
                             "description" => "Core subject for $fullName students."
                         ];
 
                         Subject::updateOrCreate(['code' => $data['code']], $data);
 
-                        // Also create a duplicate for the "Full Name" variant to fix your UI mismatch
                         $data['code'] = $sCode . "-ALT";
                         $data['program'] = $fullName;
                         Subject::updateOrCreate(['code' => $data['code']], $data);

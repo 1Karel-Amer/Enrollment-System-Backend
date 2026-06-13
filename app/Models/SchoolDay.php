@@ -10,7 +10,7 @@ class SchoolDay extends Model
         'date',
         'event_type',
         'attendance_count',
-        'event_name', // ADD THIS LINE
+        'event_name', 
     ];
 
     protected $casts = [

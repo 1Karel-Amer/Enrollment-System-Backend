@@ -44,13 +44,12 @@ class Student extends Model
         return $this->belongsTo(Course::class);
     }
 
-    // Student enrollments
+   
     public function enrollments()
     {
         return $this->hasMany(Enrollment::class);
     }
 
-    // Subjects the student is enrolled in
     public function subjects()
     {
         return $this->belongsToMany(

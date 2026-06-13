@@ -14,7 +14,7 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         // 1. Create your Login User
-        // This ensures you always have an admin account after a migrate:fresh
+        // This the  admin account after a migrate:fresh
         User::factory()->create([
             'name' => 'Admin User',
             'email' => 'test@example.com',
@@ -22,8 +22,7 @@ class DatabaseSeeder extends Seeder
             'role' => 'admin',
         ]);
 
-        // 2. Run the specific enrollment system seeders in order
-        // Note: CourseSeeder MUST come before StudentSeeder
+        
         $this->call([
             CourseSeeder::class,
             StudentSeeder::class,

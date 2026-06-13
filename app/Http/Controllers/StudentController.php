@@ -9,7 +9,7 @@ class StudentController extends Controller
 {
     public function index(Request $request)
     {
-        // with('course') ensures we get the course name, not just the ID
+        
         $query = Student::with('course');
 
         if ($request->has('search')) {
@@ -21,7 +21,7 @@ class StudentController extends Controller
             });
         }
 
-        // Returns paginated data including the course relationship
+       
         return response()->json($query->paginate(15));
     }
 

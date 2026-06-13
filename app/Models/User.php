@@ -21,7 +21,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
-        'role', // CRITICAL: This allows the 'admin' role to be saved
+        'role', 
     ];
 
     /**

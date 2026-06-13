@@ -12,8 +12,7 @@ class SchoolDaySeeder extends Seeder
     {
         // 1. Clear old data so we start fresh
         SchoolDay::truncate();
-
-        // 2. Map of specific dates to their names
+        // 2. Define some special events for the year 2026
         $events = [
             '2026-03-16' => 'Term Break',
             '2026-03-20' => 'Eid Al-Fitr',
@@ -30,10 +29,10 @@ class SchoolDaySeeder extends Seeder
             $dateString = $date->format('Y-m-d');
             $isWeekend = $date->isWeekend();
             
-            // Determine type
+          
             $type = 'regular';
             if (isset($events[$dateString])) {
-                // If it's in our list, call it a 'Holiday' or 'Event'
+                
                 $type = str_contains($events[$dateString], 'Day') ? 'Holiday' : 'Event';
             } elseif ($isWeekend) {
                 $type = 'weekend';

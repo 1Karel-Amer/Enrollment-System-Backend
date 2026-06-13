@@ -4,8 +4,8 @@ use App\Http\Controllers\StudentController;
 use App\Http\Controllers\CourseController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Api\ProgramController; // Added this
-use App\Http\Controllers\Api\SubjectController; // Added this
+use App\Http\Controllers\Api\ProgramController; 
+use App\Http\Controllers\Api\SubjectController; 
 use App\Http\Controllers\WeatherController;
 use App\Http\Controllers\SchoolDayController;
 use Illuminate\Support\Facades\Route;

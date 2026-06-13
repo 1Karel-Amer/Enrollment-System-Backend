@@ -40,7 +40,7 @@ class Subject extends Model
         )->withTimestamps();
     }
 
-    // Enrollment records
+    
     public function enrollments()
     {
         return $this->hasMany(Enrollment::class);

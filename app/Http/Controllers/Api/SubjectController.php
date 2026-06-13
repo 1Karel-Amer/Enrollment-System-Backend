@@ -12,26 +12,24 @@ class SubjectController extends Controller
     {
         $query = Subject::query();
 
-        // FIX: Use LIKE instead of exact match to handle "BSIT" vs "BS Information Technology"
-        if ($request->filled('program') && $request->program !== 'All') {
+   if ($request->filled('program') && $request->program !== 'All') {
             $program = $request->program;
             $query->where(function($q) use ($program) {
                 $q->where('program', 'LIKE', "%$program%")
-                  ->orWhere('program', 'LIKE', substr($program, 0, 4) . "%"); // Catches "BSIT" from "BS Information..."
-            });
+                  ->orWhere('program', 'LIKE', substr($program, 0, 4) . "%"); 
+            }); // <-- Added the closing parenthesis and semicolon here
         }
 
-        // FIX: Allow year filtering but ensure it doesn't break if not provided
+       
         if ($request->filled('year') && $request->year !== 'All') {
             $query->where('year', $request->year);
         }
         
-        // FIX: Add term filtering to support your Semester tabs
+       
         if ($request->filled('term') && $request->term !== 'All') {
             $query->where('term', $request->term);
         }
-
-        // Return everything else sorted by year and term
+        
         return response()->json($query->orderBy('year')->orderBy('term')->get());
     }
 
@@ -42,7 +40,7 @@ class SubjectController extends Controller
 
     public function store(Request $request)
     {
-        // Added 'sometimes' to description/preReq to prevent validation crashes
+       
         $validated = $request->validate([
             'code' => 'required|unique:subjects,code',
             'title' => 'required|string',

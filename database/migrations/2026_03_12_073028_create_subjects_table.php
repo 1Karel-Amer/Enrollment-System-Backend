@@ -23,7 +23,7 @@ return new class extends Migration
             $table->text('description')->nullable();
             $table->timestamps();
             
-            // Add this line for the "Archive" functionality
+            
             $table->softDeletes(); 
         });
     }
