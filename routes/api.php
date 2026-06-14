@@ -12,17 +12,20 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
 use App\Models\Student;
 
-
 // --- AUTHENTICATION ---
 Route::post('/login', [AuthController::class, 'login'])->name('login');
 
-// --- PUBLIC ROUTES ---
-Route::get('/dashboard-stats', [DashboardController::class, 'index']);
-Route::get('/weather/{city}', [WeatherController::class, 'getWeather']);
+// --- PUBLIC ROUTES (No Token Required) ---
+// 🚨 MOVED THESE HERE: This fixes the 401 Unauthorized error in React!
+Route::get('/students', [StudentController::class, 'index']);
+Route::get('/students/{id}', [StudentController::class, 'show']);
 Route::get('/students/{id}/predict-risk', [StudentController::class, 'predictDropoutRisk']);
 
+Route::get('/dashboard-stats', [DashboardController::class, 'index']);
+Route::get('/weather/{city}', [WeatherController::class, 'getWeather']);
 
-// --- PROTECTED ROUTES ---
+
+// --- PROTECTED ROUTES (Token Required) ---
 Route::middleware('auth:sanctum')->group(function () {
     
     // 1. Session Management
@@ -39,11 +42,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/subjects', [SubjectController::class, 'index']);
     Route::post('/subjects', [SubjectController::class, 'store']);    // Required to save new subjects
     Route::delete('/subjects/{id}', [SubjectController::class, 'destroy']); // Required to archive
-    
-    // 3. Student Module
-    Route::get('/students', [StudentController::class, 'index']);
-  
-   
     
     // 4. Course Module
     Route::get('/courses', [CourseController::class, 'index']);

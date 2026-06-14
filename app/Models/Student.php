@@ -9,8 +9,12 @@ class Student extends Model
 {
     use HasFactory;
 
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var array<int, string>
+     */
     protected $fillable = [
-
         'student_id',
         'first_name',
         'last_name',
@@ -26,26 +30,40 @@ class Student extends Model
         'enrollment_date',
         'gpa',        
         'attendance'
-
     ];
 
+    /**
+     * The attributes that should be cast.
+     *
+     * @var array<string, string>
+     */
     protected $casts = [
         'date_of_birth' => 'date',
-        'enrollment_date' => 'date'
+        'enrollment_date' => 'date',
+        'gpa' => 'float',
+        'attendance' => 'integer'
     ];
 
-    
+    /**
+     * Get the course/program associated with the student.
+     */
     public function course()
     {
         return $this->belongsTo(Course::class);
     }
 
-   
+    /**
+     * Get the direct enrollment logs for the student.
+     */
     public function enrollments()
     {
         return $this->hasMany(Enrollment::class);
     }
 
+    /**
+     * Get the subjects enrolled by the student.
+     * Pivot columns removed to prevent SQL "Column not found" errors.
+     */
     public function subjects()
     {
         return $this->belongsToMany(
@@ -53,6 +71,6 @@ class Student extends Model
             'enrollments',
             'student_id',
             'subject_id'
-        )->withTimestamps();
+        );
     }
 }
