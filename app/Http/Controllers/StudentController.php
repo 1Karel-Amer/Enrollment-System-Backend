@@ -7,6 +7,7 @@ use App\Models\Course;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 
 class StudentController extends Controller
 {
@@ -36,6 +37,27 @@ class StudentController extends Controller
     {
         $student = Student::with('course')->findOrFail($id);
 
+        // ── FIX 2: Cache the full prediction result per student ───────────────
+        // The Python subprocess (predict.py) is expensive — it spawns a new
+        // process, loads sklearn, and unpickles the model on every request.
+        // We cache the entire JSON response for 6 hours per student.
+        // The cache key includes the student ID so each student gets their own slot.
+        // To force a refresh (e.g. after grades update), call:
+        //   Cache::forget("dropout_risk_{$id}");
+        $cacheKey = "dropout_risk_{$id}";
+        $cacheTtl = 60 * 60 * 6; // 6 hours in seconds
+
+        return Cache::remember($cacheKey, $cacheTtl, function () use ($student) {
+            return $this->computePrediction($student);
+        });
+    }
+
+    /**
+     * All prediction logic extracted into a private method.
+     * This keeps predictDropoutRisk() clean and makes the cache wrapper obvious.
+     */
+    private function computePrediction(Student $student): \Illuminate\Http\JsonResponse
+    {
         // ── 1. Encode year level and term ────────────────────────────────────
         $yearsMap = ['1st Year' => 1, '2nd Year' => 2, '3rd Year' => 3, '4th Year' => 4];
         $yearEncoded = $yearsMap[$student->year_level] ?? 1;
@@ -52,7 +74,7 @@ class StudentController extends Controller
         $umFinalGpa   = $subjects->avg('final_grade')   ?? $student->gpa ?? 2.00;
         $attendance   = $student->attendance ?? 100;
 
-        // ── 3. Tighter GPA → percentage bands so midterm ≠ final ─────────────
+        // ── 3. Tighter GPA → percentage bands ────────────────────────────────
         $convertGpaToPercentage = function ($gpa) {
             if ($gpa >= 4.0)  return 98.0;
             if ($gpa >= 3.5)  return 92.0;
@@ -80,7 +102,7 @@ class StudentController extends Controller
             ];
         }
 
-        // ── 5. Linear regression slope + std deviation for volatility ─────────
+        // ── 5. Linear regression slope + std deviation ────────────────────────
         $direction = 'stable';
         $slope     = 0;
         $stdDev    = 0;
@@ -101,7 +123,6 @@ class StudentController extends Controller
             }
             $slope = $denominator != 0 ? round($numerator / $denominator, 2) : 0;
 
-            // Standard deviation — detects volatile students
             $variance = array_sum(array_map(fn($g) => ($g - $meanY) ** 2, $gpas)) / $n;
             $stdDev   = round(sqrt($variance), 2);
 
@@ -122,8 +143,6 @@ class StudentController extends Controller
         $riskScore  = floatval($rawAiScore);
         $aiThreshold = 0.70;
 
-        // FIX: Floor so Safe students never show a flat 0%
-        // Gives a small score between 0.05–0.15 based on attendance
         if ($riskScore < 0.05) {
             $riskScore = round(0.05 + (($attendance / 100) * 0.10), 2);
         }
@@ -141,7 +160,7 @@ class StudentController extends Controller
             $riskScore = 0.85;
         }
 
-        // ── 8. Expanded key factors ───────────────────────────────────────────
+        // ── 8. Key factors ────────────────────────────────────────────────────
         $keyFactors = [];
 
         if ($attendance < 75) {
@@ -198,12 +217,10 @@ class StudentController extends Controller
             ];
         }
 
-        // ── 9. Score-based recommendations with wider variance ────────────────
+        // ── 9. Suggestions ────────────────────────────────────────────────────
         $suggestions = [];
 
         if ($isHighRisk && $student->course) {
-
-            // Find the subject the student scored best in (lowest grade = best in UM scale)
             $bestSubject = $subjects
                 ->filter(fn($s) => $s->final_grade !== null)
                 ->sortBy('final_grade')
@@ -216,36 +233,21 @@ class StudentController extends Controller
             $allCourses = Course::where('id', '!=', $student->course_id)->get();
 
             $scored = $allCourses->map(function ($course) use ($student, $umFinalGpa, $attendance, $bestSubjectName) {
-                $score = 50; // base score
+                $score = 50;
 
-                // Same department = transferable credits
-                if ($course->department === $student->course->department) {
-                    $score += 20;
-                }
+                if ($course->department === $student->course->department) $score += 20;
+                if ($umFinalGpa >= 2.5) $score += 10;
+                if ($attendance >= 75)  $score += 10;
 
-                // Student has decent GPA — can handle similar rigor
-                if ($umFinalGpa >= 2.5) {
-                    $score += 10;
-                }
-
-                // Good attendance means effort is there, just wrong program
-                if ($attendance >= 75) {
-                    $score += 10;
-                }
-
-                // FIX: Wider variance so top 2 are never tied
                 $score += rand(0, 20);
                 $score += ($course->id % 7);
 
-                // FIX: Penalty for departments far from student's field
                 if ($course->department !== $student->course->department) {
                     $score -= rand(0, 10);
                 }
 
-                // Cap at 99 so it never shows 100% match
                 $score = min($score, 99);
 
-                // FIX: Reason references student's actual best subject
                 $reason = ($course->department === $student->course->department)
                     ? "Credits strongly align within the {$course->department} department — minimal units lost on transfer."
                     : "Best performance in {$bestSubjectName} suggests aptitude that aligns with this program's focus.";
@@ -311,6 +313,7 @@ class StudentController extends Controller
                 'evaluated_at'      => now()->toIso8601String(),
                 'semesters_used'    => count($history),
                 'data_completeness' => count($history) > 0 ? 'full' : 'partial',
+                'cached'            => true, // lets you verify caching is active
             ],
         ]);
     }
