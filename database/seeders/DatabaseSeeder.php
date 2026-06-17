@@ -21,12 +21,13 @@ class DatabaseSeeder extends Seeder
         ]);
 
         
-        $this->call([
-            CourseSeeder::class,
-            StudentSeeder::class,
-            SchoolDaySeeder::class,
-            ProgramSeeder::class,
-            SubjectSeeder::class,
-        ]);
+      $this->call([
+        ProgramSeeder::class,        // 1st — programs must exist first
+        CourseSeeder::class,         // 2nd — courses (if still used)
+        SubjectSeeder::class,        // 3rd — subjects need programs to exist
+        StudentSeeder::class,        // 4th — students reference program_id
+        StudentSubjectSeeder::class, // 5th — needs both students + subjects
+        SchoolDaySeeder::class,      // last — independent, can go anywhere
+    ]);
     }
 }
