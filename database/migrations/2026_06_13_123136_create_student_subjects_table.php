@@ -17,6 +17,8 @@ return new class extends Migration
         $table->string('year_level');   
         $table->string('term');         
         $table->string('school_year');  
+
+        $table->integer('attendance')->nullable();
       
         $table->decimal('midterm_grade', 3, 2)->nullable(); 
         $table->decimal('final_grade', 3, 2)->nullable();   
