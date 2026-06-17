@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Student;
-use App\Models\Course;
+use App\Models\Program;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\DB;
@@ -13,7 +13,7 @@ class StudentController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Student::with('course');
+        $query = Student::with('program');
 
         if ($request->has('search')) {
             $search = $request->query('search');
@@ -29,19 +29,18 @@ class StudentController extends Controller
 
     public function show($id)
     {
-        $student = Student::with('course')->findOrFail($id);
+        $student = Student::with('program')->findOrFail($id);
         return response()->json($student);
     }
 
     public function predictDropoutRisk($id)
     {
-        $student = Student::with('course')->findOrFail($id);
+        $student = Student::with('program')->findOrFail($id);
 
-        // ── FIX 2: Cache the full prediction result per student ───────────────
+        // ── Cache the full prediction result per student ───────────────────
         // The Python subprocess (predict.py) is expensive — it spawns a new
         // process, loads sklearn, and unpickles the model on every request.
         // We cache the entire JSON response for 6 hours per student.
-        // The cache key includes the student ID so each student gets their own slot.
         // To force a refresh (e.g. after grades update), call:
         //   Cache::forget("dropout_risk_{$id}");
         $cacheKey = "dropout_risk_{$id}";
@@ -217,10 +216,10 @@ class StudentController extends Controller
             ];
         }
 
-        // ── 9. Suggestions ────────────────────────────────────────────────────
+        // ── 9. Suggestions — now based on Program, not the legacy Course table ─
         $suggestions = [];
 
-        if ($isHighRisk && $student->course) {
+        if ($isHighRisk && $student->program) {
             $bestSubject = $subjects
                 ->filter(fn($s) => $s->final_grade !== null)
                 ->sortBy('final_grade')
@@ -230,32 +229,32 @@ class StudentController extends Controller
                 ? ($bestSubject->subject_name ?? 'core subjects')
                 : 'core subjects';
 
-            $allCourses = Course::where('id', '!=', $student->course_id)->get();
+            $allPrograms = Program::where('id', '!=', $student->program_id)->get();
 
-            $scored = $allCourses->map(function ($course) use ($student, $umFinalGpa, $attendance, $bestSubjectName) {
+            $scored = $allPrograms->map(function ($program) use ($student, $umFinalGpa, $attendance, $bestSubjectName) {
                 $score = 50;
 
-                if ($course->department === $student->course->department) $score += 20;
+                if ($program->department === $student->program->department) $score += 20;
                 if ($umFinalGpa >= 2.5) $score += 10;
                 if ($attendance >= 75)  $score += 10;
 
                 $score += rand(0, 20);
-                $score += ($course->id % 7);
+                $score += ($program->id % 7);
 
-                if ($course->department !== $student->course->department) {
+                if ($program->department !== $student->program->department) {
                     $score -= rand(0, 10);
                 }
 
                 $score = min($score, 99);
 
-                $reason = ($course->department === $student->course->department)
-                    ? "Credits strongly align within the {$course->department} department — minimal units lost on transfer."
+                $reason = ($program->department === $student->program->department)
+                    ? "Credits strongly align within the {$program->department} department — minimal units lost on transfer."
                     : "Best performance in {$bestSubjectName} suggests aptitude that aligns with this program's focus.";
 
                 return [
-                    'id'            => $course->id,
-                    'course_name'   => $course->course_name,
-                    'department'    => $course->department,
+                    'id'            => $program->id,
+                    'course_name'   => $program->name, // key kept as-is so InsightsPanel.jsx needs no changes
+                    'department'    => $program->department,
                     'match_score'   => round($score / 100, 2),
                     'match_display' => $score . '%',
                     'reason'        => $reason,
@@ -275,8 +274,8 @@ class StudentController extends Controller
         return response()->json([
             'student_id'         => $student->id,
             'name'               => $student->first_name . ' ' . $student->last_name,
-            'current_program'    => $student->course->course_name ?? 'Unassigned',
-            'current_department' => $student->course->department  ?? 'Unassigned',
+            'current_program'    => $student->program->name       ?? 'Unassigned',
+            'current_department' => $student->program->department ?? 'Unassigned',
 
             'metrics_evaluated' => [
                 'year_level_encoded' => $yearEncoded,

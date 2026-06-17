@@ -9,50 +9,11 @@ class Student extends Model
 {
     use HasFactory;
 
-    protected $fillable = [
+    protected $guarded = [];
 
-        'student_id',
-        'first_name',
-        'last_name',
-        'email',
-        'gender',
-        'date_of_birth',
-        'year_level',
-        'contact_no',
-        'address',
-        'emergency_contact_name',
-        'emergency_contact_no',
-        'course_id',
-        'enrollment_date',
-        'gpa',        
-        'attendance'
-
-    ];
-
-    protected $casts = [
-        'date_of_birth' => 'date',
-        'enrollment_date' => 'date'
-    ];
-
-    
-    public function course()
+    // Relationship to Program
+    public function program()
     {
-        return $this->belongsTo(Course::class);
-    }
-
-   
-    public function enrollments()
-    {
-        return $this->hasMany(Enrollment::class);
-    }
-
-    public function subjects()
-    {
-        return $this->belongsToMany(
-            Subject::class,
-            'enrollments',
-            'student_id',
-            'subject_id'
-        )->withTimestamps();
+        return $this->belongsTo(Program::class, 'program_id');
     }
 }

@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Student;
-use App\Models\Course;
+use App\Models\Program;
 use App\Models\SchoolDay;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,8 +16,8 @@ class DashboardController extends Controller
     {
         // FIX 4: Cache the entire dashboard response for 60 seconds.
         //
-        // The dashboard runs 3 aggregate queries (Student::count, Course::count,
-        // enrollment trends, course distribution, attendance patterns) on every
+        // The dashboard runs several aggregate queries (Student::count, Program::count,
+        // enrollment trends, program distribution, attendance patterns) on every
         // page load. These numbers don't change second-to-second, so we cache
         // the full result and only recompute it once per minute.
         //
@@ -53,7 +53,7 @@ class DashboardController extends Controller
             ],
             [
                 'label' => 'Active Programs',
-                'value' => Course::count(),
+                'value' => Program::count(),
                 'color' => 'bg-slate-50',
                 'trend' => '8 Departments',
             ],
@@ -83,11 +83,11 @@ class DashboardController extends Controller
             ];
         });
 
-        // Course distribution
-        $courseData = Course::withCount('students')->get()->map(function ($course) {
+        // Program distribution
+        $programData = Program::withCount('students')->get()->map(function ($program) {
             return [
-                'name'           => $course->name ?? $course->course_name ?? 'Unknown Program',
-                'students_count' => (int) $course->students_count,
+                'name'           => $program->name ?? 'Unknown Program',
+                'students_count' => (int) $program->students_count,
             ];
         });
 
@@ -100,7 +100,7 @@ class DashboardController extends Controller
         return response()->json([
             'summary'             => $summary,
             'enrollment_trends'   => $enrollmentData,
-            'course_distribution' => $courseData,
+            'course_distribution' => $programData,
             'attendance_patterns' => $attendanceData,
         ]);
     }

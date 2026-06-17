@@ -2,23 +2,29 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Program extends Model
 {
+    use HasFactory;
+
     protected $fillable = [
         'code',
+        'department',
         'name',
         'type',
         'duration',
         'units',
         'status',
-        'description'
+        'description',
     ];
 
-    public function subjects(): HasMany
+    /**
+     * Students enrolled in this program.
+     */
+    public function students()
     {
-        return $this->hasMany(Subject::class, 'program', 'code');
+        return $this->hasMany(Student::class, 'program_id');
     }
 }

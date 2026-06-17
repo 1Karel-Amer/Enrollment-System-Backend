@@ -4,65 +4,86 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use App\Models\Student;
-use App\Models\Course;
-use Faker\Factory as Faker;
-use Carbon\Carbon;
+use App\Models\Program;
+use Illuminate\Support\Facades\DB;
+
+// OVERHAUL: Students now reference program_id (programs table) directly.
+// This eliminates the course_id / courses table disconnect.
 
 class StudentSeeder extends Seeder
 {
     public function run(): void
     {
-        $faker = Faker::create('en_PH');
+        // Load all programs so we can assign them by code
+        $programs = Program::all()->keyBy('code');
 
-        $courseIds = Course::pluck('id')->toArray();
-
-        if (!$courseIds) {
-            $this->command->warn("Run CourseSeeder first.");
+        if ($programs->isEmpty()) {
+            $this->command->error('No programs found. Run ProgramSeeder first.');
             return;
         }
 
-        $yearLevels = ['1st Year','2nd Year','3rd Year','4th Year'];
+        $programCodes = $programs->keys()->toArray();
+        $yearLevels   = ['1st Year', '2nd Year', '3rd Year', '4th Year'];
+        $genders      = ['Male', 'Female'];
 
-        $this->command->info("Seeding 500 Students...");
+        $firstNames = [
+            'Maria', 'Juan', 'Jose', 'Ana', 'Carlo', 'Liza', 'Mark', 'Nina',
+            'Paolo', 'Rosa', 'Luis', 'Grace', 'Kevin', 'Ella', 'Ryan', 'Faith',
+            'James', 'Claire', 'Miguel', 'Sophia', 'Aaron', 'Jasmine', 'Noel',
+            'Bianca', 'Renz', 'Katrina', 'Jerome', 'Angela', 'Vince', 'Danna',
+        ];
 
-        foreach(range(1,500) as $i){
+        $lastNames = [
+            'Santos', 'Reyes', 'Cruz', 'Bautista', 'Garcia', 'Mendoza', 'Torres',
+            'Flores', 'Rivera', 'Ramos', 'Gomez', 'Diaz', 'Morales', 'Castro',
+            'Vargas', 'Aquino', 'Lim', 'Tan', 'Go', 'Sy', 'Dela Cruz', 'Villanueva',
+            'Fernandez', 'Lopez', 'Pascual', 'Navarro', 'Aguilar', 'Salazar',
+        ];
 
-            $date = Carbon::instance(
-                $faker->dateTimeBetween('-6 months','now')
-            );
+        $students = [];
+        $year     = now()->year;
 
-            $year = $faker->randomElement($yearLevels);
+        for ($i = 1; $i <= 200; $i++) {
+            $firstName    = $firstNames[array_rand($firstNames)];
+            $lastName     = $lastNames[array_rand($lastNames)];
+            $gender       = $genders[array_rand($genders)];
+            $yearLevel    = $yearLevels[array_rand($yearLevels)];
+            $programCode  = $programCodes[array_rand($programCodes)];
+            $program      = $programs[$programCode];
 
-            Student::create([
+            // GPA on UM scale: 1.00 = best, 5.00 = failing
+            // 70% of students are passing (1.0–3.0), 30% are struggling
+            $gpa = rand(1, 10) <= 7
+                ? round(rand(100, 300) / 100, 2)   // 1.00–3.00 passing
+                : round(rand(301, 500) / 100, 2);  // 3.01–5.00 at risk
 
-                'student_id' => '2026-' . str_pad($i,4,'0',STR_PAD_LEFT),
+            $attendance = rand(1, 10) <= 8
+                ? rand(75, 100)   // 75%–100% good attendance
+                : rand(40, 74);   // 40%–74% poor attendance
 
-                'first_name' => $faker->firstName,
-                'last_name'  => $faker->lastName,
-
-                'email' => $faker->unique()->safeEmail,
-
-                'gender' => $faker->randomElement(['Male','Female']),
-
-                'date_of_birth' => $faker->date('Y-m-d','2006-12-31'),
-
-                'year_level' => $year,
-
-                'contact_no' => '09'.$faker->numberBetween(100000000,999999999),
-
-                'address' => $faker->streetAddress.', '.$faker->city,
-
-                'emergency_contact_name' => $faker->name,
-                'emergency_contact_no' => '09'.$faker->numberBetween(100000000,999999999),
-
-                'course_id' => $faker->randomElement($courseIds),
-
-                'enrollment_date' => $date,
-                'created_at' => $date,
-                'updated_at' => $date,
-            ]);
+            $students[] = [
+                'student_id'              => $year . '-' . str_pad($i, 4, '0', STR_PAD_LEFT),
+                'first_name'              => $firstName,
+                'last_name'               => $lastName,
+                'email'                   => strtolower($firstName . '.' . $lastName . $i . '@um.edu.ph'),
+                'gender'                  => $gender,
+                'date_of_birth'           => now()->subYears(rand(18, 25))->subDays(rand(0, 365))->toDateString(),
+                'year_level'              => $yearLevel,
+                'contact_no'              => '09' . rand(100000000, 999999999),
+                'address'                 => 'Tagum City, Davao del Norte',
+                'emergency_contact_name'  => $firstNames[array_rand($firstNames)] . ' ' . $lastName,
+                'emergency_contact_no'    => '09' . rand(100000000, 999999999),
+                'program_id'              => $program->id,
+                'enrollment_date'         => now()->subMonths(rand(1, 36))->toDateString(),
+                'gpa'                     => $gpa,
+                'attendance'              => $attendance,
+                'created_at'              => now(),
+                'updated_at'              => now(),
+            ];
         }
 
-        $this->command->info("500 Students Seeded Successfully");
+        foreach (array_chunk($students, 50) as $chunk) {
+            DB::table('students')->insert($chunk);
+        }
     }
 }

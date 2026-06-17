@@ -3,9 +3,10 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 use App\Models\Student;
 use App\Models\Subject;
-use Illuminate\Support\Facades\DB;
+
 
 class StudentSubjectSeeder extends Seeder
 {
@@ -28,6 +29,17 @@ class StudentSubjectSeeder extends Seeder
             $currentYearIndex = array_search($student->year_level, $years);
             if ($currentYearIndex === false) $currentYearIndex = 0;
 
+            // Get the program code for the student to filter subjects
+            $programCode = DB::table('programs')->where('id', $student->program_id)->value('code');
+            
+            // Filter global subjects collection down to ONLY match this student's program
+            $programSubjects = $subjects->where('program', $programCode);
+
+            // Fallback safety check: If no program-specific subjects exist, default back to all subjects
+            if ($programSubjects->isEmpty()) {
+                $programSubjects = $subjects;
+            }
+
             // Loop through their past academic years up to their current standing
             for ($y = 0; $y <= $currentYearIndex; $y++) {
                 foreach ($terms as $term) {
@@ -37,8 +49,8 @@ class StudentSubjectSeeder extends Seeder
                         continue;
                     }
 
-                    // Grab a random bundle of 4-5 subjects per semester
-                    $semesterSubjects = $subjects->random(rand(4, 5));
+                    
+                    $semesterSubjects = $programSubjects->random(min(rand(4, 5), $programSubjects->count()));
 
                     foreach ($semesterSubjects as $subject) {
                         
@@ -76,7 +88,6 @@ class StudentSubjectSeeder extends Seeder
             }
         }
 
-       
         foreach (array_chunk($records, 1000) as $chunk) {
             DB::table('student_subjects')->insert($chunk);
         }
