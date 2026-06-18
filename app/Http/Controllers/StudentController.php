@@ -11,6 +11,30 @@ use Illuminate\Support\Facades\Cache;
 
 class StudentController extends Controller
 {
+    // ── UM Tagum College Grading Scale (S.Y. 2020-2021) ──────────────────────
+    // Scale  | Conversion | Grade | Description
+    // 96-100 | 4.0        | A     | High Distinction
+    // 90-95  | 3.5        | B+    | Distinction
+    // 85-89  | 3.0        | B     | Very Good
+    // 80-84  | 2.5        | C+    | Good
+    // 75-79  | 2.0        | C-    | Average
+    // <75    | 1.0        | F     | Fail
+    private function getGradeInfo(?float $grade): array
+    {
+        if ($grade === null) {
+            return ['letter' => 'INC', 'description' => 'Incomplete', 'range' => '-'];
+        }
+        if ($grade >= 4.0) return ['letter' => 'A',  'description' => 'High Distinction', 'range' => '96–100'];
+        if ($grade >= 3.5) return ['letter' => 'B+', 'description' => 'Distinction',      'range' => '90–95'];
+        if ($grade >= 3.0) return ['letter' => 'B',  'description' => 'Very Good',         'range' => '85–89'];
+        if ($grade >= 2.5) return ['letter' => 'C+', 'description' => 'Good',              'range' => '80–84'];
+        if ($grade >= 2.0) return ['letter' => 'C-', 'description' => 'Average',           'range' => '75–79'];
+        return                    ['letter' => 'F',  'description' => 'Fail',              'range' => '<75'];
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // GET /students
+    // ─────────────────────────────────────────────────────────────────────────
     public function index(Request $request)
     {
         $query = Student::with('program');
@@ -19,50 +43,117 @@ class StudentController extends Controller
             $search = $request->query('search');
             $query->where(function ($q) use ($search) {
                 $q->where('student_id', 'LIKE', "%{$search}%")
-                  ->orWhere('first_name', 'LIKE', "%{$search}%")
-                  ->orWhere('last_name', 'LIKE', "%{$search}%");
+                  ->orWhere('first_name',  'LIKE', "%{$search}%")
+                  ->orWhere('last_name',   'LIKE', "%{$search}%");
             });
         }
 
         return response()->json($query->paginate(15));
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // GET /students/{id}
+    // ─────────────────────────────────────────────────────────────────────────
     public function show($id)
     {
-        $student = Student::with('program')->findOrFail($id);
-        return response()->json($student);
+        $student = Student::with(['program', 'subjects', 'attendance'])->findOrFail($id);
+
+        // Start with the model array (contains all columns + eager-loaded relations)
+        $studentData = $student->toArray();
+
+        if ($student->relationLoaded('subjects')) {
+            $gradesCollection = $student->subjects->map(function ($subject) {
+                $finalGrade   = $subject->pivot->final_grade   !== null ? (float) $subject->pivot->final_grade   : null;
+                $midtermGrade = $subject->pivot->midterm_grade !== null ? (float) $subject->pivot->midterm_grade : null;
+                $gradeInfo    = $this->getGradeInfo($finalGrade);
+
+                return [
+                    'subject_code'      => $subject->code,
+                    'subject_name'      => $subject->title,
+                    'units'             => (int) $subject->units,
+                    'midterm_grade'     => $midtermGrade,
+                    'final_grade'       => $finalGrade,
+                    'grade_letter'      => $gradeInfo['letter'],
+                    'grade_description' => $gradeInfo['description'],
+                    'grade_range'       => $gradeInfo['range'],
+                    'status'            => $subject->pivot->status,
+                    'academic_year'     => $subject->pivot->school_year,
+                    'semester'          => $subject->pivot->term,
+                    'year_level'        => $subject->pivot->year_level,
+                ];
+            });
+
+            $studentData['grades'] = $gradesCollection->values();
+
+            // ── Cumulative GWA: weighted average of ALL graded subjects ────────
+            // (Failed subjects are included — they drag the GWA down, as is standard)
+            $graded      = $gradesCollection->filter(fn($g) => $g['final_grade'] !== null);
+            $totalUnits  = $graded->sum('units');
+            $weightedSum = $graded->sum(fn($g) => $g['final_grade'] * $g['units']);
+
+            $studentData['gpa']            = $totalUnits > 0 ? round($weightedSum / $totalUnits, 2) : 0.00;
+            $studentData['required_units'] = $student->program ? $student->program->units : 148;
+
+        } else {
+            $studentData['grades']         = [];
+            $studentData['gpa']            = 0.00;
+            $studentData['required_units'] = 148;
+        }
+
+        return response()->json($studentData);
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // PUT /students/{id}  — assign / change program
+    // ─────────────────────────────────────────────────────────────────────────
+    public function update(Request $request, $id)
+    {
+        $student = Student::findOrFail($id);
+
+        $request->validate([
+            'program_id' => 'nullable|exists:programs,id',
+        ]);
+
+        $student->program_id = $request->input('program_id');
+        $student->save();
+
+        // Bust the prediction cache — program change affects suggestions
+        Cache::forget("dropout_risk_{$id}");
+
+        return response()->json([
+            'message' => 'Program assigned successfully.',
+            'student' => $student->load('program'),
+        ]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // GET /students/{id}/predict-risk
+    // ─────────────────────────────────────────────────────────────────────────
     public function predictDropoutRisk($id)
     {
-        $student = Student::with('program')->findOrFail($id);
+        $student = Student::with(['program', 'attendance'])->findOrFail($id);
 
-        // ── Cache the full prediction result per student ───────────────────
-        // The Python subprocess (predict.py) is expensive — it spawns a new
-        // process, loads sklearn, and unpickles the model on every request.
-        // We cache the entire JSON response for 6 hours per student.
-        // To force a refresh (e.g. after grades update), call:
-        //   Cache::forget("dropout_risk_{$id}");
         $cacheKey = "dropout_risk_{$id}";
-        $cacheTtl = 60 * 60 * 6; // 6 hours in seconds
+        $cacheTtl = 60 * 60 * 6; // 6 hours
 
-        return Cache::remember($cacheKey, $cacheTtl, function () use ($student) {
+        $data = Cache::remember($cacheKey, $cacheTtl, function () use ($student) {
             return $this->computePrediction($student);
         });
+
+        return response()->json($data);
     }
 
-    /**
-     * All prediction logic extracted into a private method.
-     * This keeps predictDropoutRisk() clean and makes the cache wrapper obvious.
-     */
-    private function computePrediction(Student $student): \Illuminate\Http\JsonResponse
+    // ─────────────────────────────────────────────────────────────────────────
+    // PRIVATE — ML prediction engine
+    // ─────────────────────────────────────────────────────────────────────────
+    private function computePrediction(Student $student): array
     {
-        // ── 1. Encode year level and term ────────────────────────────────────
-        $yearsMap = ['1st Year' => 1, '2nd Year' => 2, '3rd Year' => 3, '4th Year' => 4];
+        // ── 1. Encode year level and term ──────────────────────────────────────
+        $yearsMap    = ['1st Year' => 1, '2nd Year' => 2, '3rd Year' => 3, '4th Year' => 4];
         $yearEncoded = $yearsMap[$student->year_level] ?? 1;
         $termEncoded = 1;
 
-        // ── 2. Fetch all subject records ──────────────────────────────────────
+        // ── 2. Fetch all subject records ───────────────────────────────────────
         $subjects = DB::table('student_subjects')
             ->where('student_id', $student->id)
             ->orderBy('school_year')
@@ -71,25 +162,37 @@ class StudentController extends Controller
 
         $umMidtermGpa = $subjects->avg('midterm_grade') ?? $student->gpa ?? 2.00;
         $umFinalGpa   = $subjects->avg('final_grade')   ?? $student->gpa ?? 2.00;
-        $attendance   = $student->attendance ?? 100;
 
-        // ── 3. Tighter GPA → percentage bands ────────────────────────────────
+        // ── 3. Calculate Real Attendance Rate ──────────────────────────────────
+        $attendanceCollection = $student->relationLoaded('attendance')
+            ? $student->getRelation('attendance')
+            : collect();
+
+        if ($attendanceCollection->count() > 0) {
+            $totalClasses  = $attendanceCollection->count() * 36; // ~36 meetings/subject
+            $totalAbsences = $attendanceCollection->sum('absences');
+            $attendance    = round((($totalClasses - $totalAbsences) / $totalClasses) * 100);
+            $attendance    = max(0, min(100, $attendance));
+        } else {
+            $attendance = $student->getAttributes()['attendance'] ?? 100;
+        }
+
+        // ── 4. UM GPA → percentage (correctly mapped to the 2020-2021 scale) ──
+        // UM: 4.0=A(96-100), 3.5=B+(90-95), 3.0=B(85-89), 2.5=C+(80-84), 2.0=C-(75-79), 1.0=F(<75)
         $convertGpaToPercentage = function ($gpa) {
-            if ($gpa >= 4.0)  return 98.0;
-            if ($gpa >= 3.5)  return 92.0;
-            if ($gpa >= 3.0)  return 87.0;
-            if ($gpa >= 2.75) return 83.0;
-            if ($gpa >= 2.5)  return 79.0;
-            if ($gpa >= 2.25) return 75.0;
-            if ($gpa >= 2.0)  return 72.0;
-            return 60.0;
+            if ($gpa >= 4.0) return 98.0;  // midpoint of 96-100
+            if ($gpa >= 3.5) return 92.0;  // midpoint of 90-95
+            if ($gpa >= 3.0) return 87.0;  // midpoint of 85-89
+            if ($gpa >= 2.5) return 82.0;  // midpoint of 80-84
+            if ($gpa >= 2.0) return 77.0;  // midpoint of 75-79
+            return 65.0;                    // below 75 (F / 1.0)
         };
 
         $midtermPercent = $convertGpaToPercentage($umMidtermGpa);
         $finalPercent   = $convertGpaToPercentage($umFinalGpa);
 
-        // ── 4. Build GPA trend history semester by semester ───────────────────
-        $history = [];
+        // ── 5. GPA trend history semester by semester ──────────────────────────
+        $history      = [];
         $groupedBySem = $subjects->groupBy(function ($item) {
             return $item->school_year . ' T' . $item->term;
         });
@@ -101,7 +204,7 @@ class StudentController extends Controller
             ];
         }
 
-        // ── 5. Linear regression slope + std deviation ────────────────────────
+        // ── 6. Linear regression slope + standard deviation ───────────────────
         $direction = 'stable';
         $slope     = 0;
         $stdDev    = 0;
@@ -134,19 +237,19 @@ class StudentController extends Controller
             }
         }
 
-        // ── 6. Run Python ML model ────────────────────────────────────────────
+        // ── 7. Run Python ML model ─────────────────────────────────────────────
         $scriptPath = storage_path('app/ai/predict.py');
         $result     = Process::run("python {$scriptPath} {$yearEncoded} {$termEncoded} {$midtermPercent} {$finalPercent} {$attendance}");
 
-        $rawAiScore = trim($result->output());
-        $riskScore  = floatval($rawAiScore);
+        $rawAiScore  = trim($result->output());
+        $riskScore   = floatval($rawAiScore);
         $aiThreshold = 0.70;
 
         if ($riskScore < 0.05) {
             $riskScore = round(0.05 + (($attendance / 100) * 0.10), 2);
         }
 
-        // ── 7. High risk triggers ─────────────────────────────────────────────
+        // ── 8. High risk triggers ──────────────────────────────────────────────
         $isHighRisk = (
             $riskScore >= $aiThreshold ||
             $attendance < 75           ||
@@ -159,7 +262,7 @@ class StudentController extends Controller
             $riskScore = 0.85;
         }
 
-        // ── 8. Key factors ────────────────────────────────────────────────────
+        // ── 9. Key factors ─────────────────────────────────────────────────────
         $keyFactors = [];
 
         if ($attendance < 75) {
@@ -194,7 +297,7 @@ class StudentController extends Controller
                 'factor' => 'final_gpa_avg',
                 'value'  => round($umFinalGpa, 2),
                 'impact' => 'medium',
-                'note'   => 'Below university passing average of 2.0',
+                'note'   => 'Below university passing average (C- / 2.0 on UM scale)',
             ];
         }
 
@@ -203,7 +306,7 @@ class StudentController extends Controller
                 'factor' => 'current_gpa',
                 'value'  => round($umFinalGpa, 2),
                 'impact' => 'medium',
-                'note'   => 'GPA is near the minimum passing threshold — needs monitoring',
+                'note'   => 'GPA is near the C- passing threshold — monitor closely',
             ];
         }
 
@@ -216,13 +319,13 @@ class StudentController extends Controller
             ];
         }
 
-        // ── 9. Suggestions — now based on Program, not the legacy Course table ─
+        // ── 10. Alternative program suggestions ───────────────────────────────
         $suggestions = [];
 
         if ($isHighRisk && $student->program) {
             $bestSubject = $subjects
                 ->filter(fn($s) => $s->final_grade !== null)
-                ->sortBy('final_grade')
+                ->sortByDesc('final_grade')
                 ->first();
 
             $bestSubjectName = $bestSubject
@@ -237,14 +340,11 @@ class StudentController extends Controller
                 if ($program->department === $student->program->department) $score += 20;
                 if ($umFinalGpa >= 2.5) $score += 10;
                 if ($attendance >= 75)  $score += 10;
-
                 $score += rand(0, 20);
                 $score += ($program->id % 7);
-
                 if ($program->department !== $student->program->department) {
                     $score -= rand(0, 10);
                 }
-
                 $score = min($score, 99);
 
                 $reason = ($program->department === $student->program->department)
@@ -253,7 +353,7 @@ class StudentController extends Controller
 
                 return [
                     'id'            => $program->id,
-                    'course_name'   => $program->name, // key kept as-is so InsightsPanel.jsx needs no changes
+                    'course_name'   => $program->name,
                     'department'    => $program->department,
                     'match_score'   => round($score / 100, 2),
                     'match_display' => $score . '%',
@@ -266,12 +366,12 @@ class StudentController extends Controller
 
             $rank = 1;
             foreach ($scored as $s) {
-                $suggestions[] = array_merge($s, ['rank' => $rank++]);
+                $suggestions[] = array_merge($s->toArray(), ['rank' => $rank++]);
             }
         }
 
-        // ── 10. Return enriched JSON ──────────────────────────────────────────
-        return response()->json([
+        // ── 11. Return enriched array ──────────────────────────────────────────
+        return [
             'student_id'         => $student->id,
             'name'               => $student->first_name . ' ' . $student->last_name,
             'current_program'    => $student->program->name       ?? 'Unassigned',
@@ -312,8 +412,8 @@ class StudentController extends Controller
                 'evaluated_at'      => now()->toIso8601String(),
                 'semesters_used'    => count($history),
                 'data_completeness' => count($history) > 0 ? 'full' : 'partial',
-                'cached'            => true, // lets you verify caching is active
+                'cached'            => true,
             ],
-        ]);
+        ];
     }
 }
