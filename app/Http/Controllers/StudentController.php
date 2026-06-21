@@ -29,51 +29,161 @@ class StudentController extends Controller
 
     public function show($id)
     {
-        $student = Student::with('program')->findOrFail($id);
-        return response()->json($student);
+        $student = Student::with(['program', 'attendanceLogs'])->findOrFail($id);
+        
+        $subjects = DB::table('student_subjects')
+            ->join('subjects', 'student_subjects.subject_id', '=', 'subjects.id')
+            ->where('student_subjects.student_id', $student->id)
+            ->orderBy('student_subjects.school_year')
+            ->orderBy('student_subjects.term')
+            ->select(
+                'subjects.code as subject_code',
+                'subjects.title as subject_name',
+                'subjects.units as units',
+                'student_subjects.status as status',
+                'student_subjects.school_year as school_year',
+                'student_subjects.term as term',
+                'student_subjects.attendance as subject_attendance',
+                'student_subjects.midterm_grade as midterm_grade',
+                'student_subjects.final_grade as final_grade'
+            )
+            ->get();
+
+        $studentArray = $student->toArray();
+        $studentArray['grades'] = $subjects;
+
+        return response()->json($studentArray);
+    }
+
+    /**
+     * POST /students/{id}/grades
+     */
+    public function addGrade(Request $request, $id)
+    {
+        $student = Student::findOrFail($id);
+
+        $validated = $request->validate([
+            'subject_id'    => 'required|exists:subjects,id',
+            'year_level'    => 'required|string',
+            'term'          => 'required|string',
+            'school_year'   => 'required|string',
+            'attendance'    => 'nullable|integer|min:0|max:100',
+            'midterm_grade' => 'nullable|numeric|min:0|max:5',
+            'final_grade'   => 'nullable|numeric|min:0|max:5',
+            'status'        => 'required|string|in:Passed,Failed,Dropped',
+        ]);
+
+        $validated['student_id'] = $student->id;
+        $validated['created_at'] = now();
+        $validated['updated_at'] = now();
+
+        $recordId = DB::table('student_subjects')->insertGetId($validated);
+
+        Cache::forget("dropout_risk_{$id}");
+
+        return response()->json([
+            'message' => 'Grade record added successfully.',
+            'id'      => $recordId,
+        ], 201);
+    }
+
+    /**
+     * GET /students/{id}/attendance
+     * SIMPLIFIED: Returns ONLY present and absent logs and filters out late/excused.
+     */
+    public function attendanceLog($id)
+    {
+        $student = Student::findOrFail($id);
+
+        // 1. Calculate Overall Summary (Only counting Present and Absent)
+        $logs = DB::table('attendance_logs')
+            ->where('student_id', $student->id)
+            ->whereIn('status', ['present', 'absent']) // Filter out late/excused
+            ->get();
+
+        $present = $logs->where('status', 'present')->count();
+        $absent  = $logs->where('status', 'absent')->count();
+        $total   = $present + $absent;
+
+        $rate = $total > 0
+            ? round(($present / $total) * 100)
+            : ($student->attendance ?? 0);
+
+        $summary = [
+            'attendance_rate' => $rate,
+            'present'         => $present,
+            'absent'          => $absent,
+        ];
+
+        // 2. Calculate Per-Subject Attendance (Only counting Present and Absent)
+        $subjectLogs = DB::table('attendance_logs')
+            ->join('subjects', 'attendance_logs.subject_id', '=', 'subjects.id')
+            ->where('attendance_logs.student_id', $student->id)
+            ->whereIn('attendance_logs.status', ['present', 'absent']) // Filter out late/excused
+            ->select('attendance_logs.status', 'subjects.code as subject_code', 'subjects.title as subject_name')
+            ->get();
+
+        $subjectAttendance = [];
+        $grouped = $subjectLogs->groupBy('subject_code');
+
+        foreach ($grouped as $code => $group) {
+             $subPresent = $group->where('status', 'present')->count();
+             $subAbsent  = $group->where('status', 'absent')->count();
+             $subTotal   = $subPresent + $subAbsent;
+
+             $subRate = $subTotal > 0 
+                ? round(($subPresent / $subTotal) * 100) 
+                : 0;
+
+             $subjectAttendance[] = [
+                 'subject_code'    => $code,
+                 'subject_name'    => $group->first()->subject_name,
+                 'present'         => $subPresent,
+                 'absent'          => $subAbsent,
+                 'attendance_rate' => $subRate
+             ];
+        }
+
+        return response()->json([
+            'summary'            => $summary,
+            'subject_attendance' => array_values($subjectAttendance)
+        ]);
     }
 
     public function predictDropoutRisk($id)
     {
         $student = Student::with('program')->findOrFail($id);
 
-        // ── Cache the full prediction result per student ───────────────────
-        // The Python subprocess (predict.py) is expensive — it spawns a new
-        // process, loads sklearn, and unpickles the model on every request.
-        // We cache the entire JSON response for 6 hours per student.
-        // To force a refresh (e.g. after grades update), call:
-        //   Cache::forget("dropout_risk_{$id}");
         $cacheKey = "dropout_risk_{$id}";
-        $cacheTtl = 60 * 60 * 6; // 6 hours in seconds
+        $cacheTtl = 60 * 60 * 6;
 
         return Cache::remember($cacheKey, $cacheTtl, function () use ($student) {
             return $this->computePrediction($student);
         });
     }
 
-    /**
-     * All prediction logic extracted into a private method.
-     * This keeps predictDropoutRisk() clean and makes the cache wrapper obvious.
-     */
     private function computePrediction(Student $student): \Illuminate\Http\JsonResponse
     {
-        // ── 1. Encode year level and term ────────────────────────────────────
         $yearsMap = ['1st Year' => 1, '2nd Year' => 2, '3rd Year' => 3, '4th Year' => 4];
         $yearEncoded = $yearsMap[$student->year_level] ?? 1;
         $termEncoded = 1;
 
-        // ── 2. Fetch all subject records ──────────────────────────────────────
         $subjects = DB::table('student_subjects')
-            ->where('student_id', $student->id)
-            ->orderBy('school_year')
-            ->orderBy('term')
+            ->join('subjects', 'student_subjects.subject_id', '=', 'subjects.id')
+            ->where('student_subjects.student_id', $student->id)
+            ->orderBy('student_subjects.school_year')
+            ->orderBy('student_subjects.term')
+            ->select(
+                'student_subjects.*',
+                'subjects.title as subject_name',
+                'subjects.code as subject_code'
+            )
             ->get();
 
         $umMidtermGpa = $subjects->avg('midterm_grade') ?? $student->gpa ?? 2.00;
         $umFinalGpa   = $subjects->avg('final_grade')   ?? $student->gpa ?? 2.00;
         $attendance   = $student->attendance ?? 100;
 
-        // ── 3. Tighter GPA → percentage bands ────────────────────────────────
         $convertGpaToPercentage = function ($gpa) {
             if ($gpa >= 4.0)  return 98.0;
             if ($gpa >= 3.5)  return 92.0;
@@ -88,7 +198,6 @@ class StudentController extends Controller
         $midtermPercent = $convertGpaToPercentage($umMidtermGpa);
         $finalPercent   = $convertGpaToPercentage($umFinalGpa);
 
-        // ── 4. Build GPA trend history semester by semester ───────────────────
         $history = [];
         $groupedBySem = $subjects->groupBy(function ($item) {
             return $item->school_year . ' T' . $item->term;
@@ -101,7 +210,6 @@ class StudentController extends Controller
             ];
         }
 
-        // ── 5. Linear regression slope + std deviation ────────────────────────
         $direction = 'stable';
         $slope     = 0;
         $stdDev    = 0;
@@ -134,7 +242,6 @@ class StudentController extends Controller
             }
         }
 
-        // ── 6. Run Python ML model ────────────────────────────────────────────
         $scriptPath = storage_path('app/ai/predict.py');
         $result     = Process::run("python {$scriptPath} {$yearEncoded} {$termEncoded} {$midtermPercent} {$finalPercent} {$attendance}");
 
@@ -146,7 +253,6 @@ class StudentController extends Controller
             $riskScore = round(0.05 + (($attendance / 100) * 0.10), 2);
         }
 
-        // ── 7. High risk triggers ─────────────────────────────────────────────
         $isHighRisk = (
             $riskScore >= $aiThreshold ||
             $attendance < 75           ||
@@ -159,7 +265,6 @@ class StudentController extends Controller
             $riskScore = 0.85;
         }
 
-        // ── 8. Key factors ────────────────────────────────────────────────────
         $keyFactors = [];
 
         if ($attendance < 75) {
@@ -216,7 +321,6 @@ class StudentController extends Controller
             ];
         }
 
-        // ── 9. Suggestions — now based on Program, not the legacy Course table ─
         $suggestions = [];
 
         if ($isHighRisk && $student->program) {
@@ -253,7 +357,7 @@ class StudentController extends Controller
 
                 return [
                     'id'            => $program->id,
-                    'course_name'   => $program->name, // key kept as-is so InsightsPanel.jsx needs no changes
+                    'course_name'   => $program->name,
                     'department'    => $program->department,
                     'match_score'   => round($score / 100, 2),
                     'match_display' => $score . '%',
@@ -270,7 +374,6 @@ class StudentController extends Controller
             }
         }
 
-        // ── 10. Return enriched JSON ──────────────────────────────────────────
         return response()->json([
             'student_id'         => $student->id,
             'name'               => $student->first_name . ' ' . $student->last_name,
@@ -312,7 +415,7 @@ class StudentController extends Controller
                 'evaluated_at'      => now()->toIso8601String(),
                 'semesters_used'    => count($history),
                 'data_completeness' => count($history) > 0 ? 'full' : 'partial',
-                'cached'            => true, // lets you verify caching is active
+                'cached'            => true,
             ],
         ]);
     }

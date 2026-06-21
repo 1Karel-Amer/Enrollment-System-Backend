@@ -28,6 +28,7 @@ class DatabaseSeeder extends Seeder
         StudentSeeder::class,        // 4th — students reference program_id
         StudentSubjectSeeder::class, // 5th — needs both students + subjects
         SchoolDaySeeder::class,      // last — independent, can go anywhere
+        AttendanceLogSeeder::class,  // last — needs students + subjects
     ]);
     }
 }
