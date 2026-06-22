@@ -37,20 +37,22 @@ class StudentController extends Controller
             ->orderBy('student_subjects.school_year')
             ->orderBy('student_subjects.term')
             ->select(
-                'subjects.code as subject_code',
-                'subjects.title as subject_name',
+                'subjects.code as code', 
+                'subjects.title as title', 
                 'subjects.units as units',
                 'student_subjects.status as status',
-                'student_subjects.school_year as school_year',
+                'student_subjects.school_year as year', 
                 'student_subjects.term as term',
                 'student_subjects.attendance as subject_attendance',
                 'student_subjects.midterm_grade as midterm_grade',
                 'student_subjects.final_grade as final_grade'
+            
             )
             ->get();
 
         $studentArray = $student->toArray();
         $studentArray['grades'] = $subjects;
+        $studentArray['subjects'] = $subjects;
 
         return response()->json($studentArray);
     }
@@ -176,12 +178,30 @@ class StudentController extends Controller
             ->select(
                 'student_subjects.*',
                 'subjects.title as subject_name',
-                'subjects.code as subject_code'
+                'subjects.code as subject_code',
+                'subjects.units as units' // <-- ADDED: Now we pull units for accurate math
             )
             ->get();
 
-        $umMidtermGpa = $subjects->avg('midterm_grade') ?? $student->gpa ?? 2.00;
-        $umFinalGpa   = $subjects->avg('final_grade')   ?? $student->gpa ?? 2.00;
+        // Calculate Overall Weighted GPAs
+        $totalUnits = 0;
+        $totalMidtermWeighted = 0;
+        $totalFinalWeighted = 0;
+
+        foreach ($subjects as $sub) {
+            $units = (float) ($sub->units ?? 3);
+            $mGrade = (float) $sub->midterm_grade;
+            $fGrade = (float) $sub->final_grade;
+
+            if ($mGrade > 0) $totalMidtermWeighted += ($mGrade * $units);
+            if ($fGrade > 0) {
+                $totalFinalWeighted += ($fGrade * $units);
+                $totalUnits += $units; // Use final grade valid units as baseline
+            }
+        }
+
+        $umMidtermGpa = $totalUnits > 0 ? round($totalMidtermWeighted / $totalUnits, 2) : ($student->gpa ?? 2.00);
+        $umFinalGpa   = $totalUnits > 0 ? round($totalFinalWeighted / $totalUnits, 2) : ($student->gpa ?? 2.00);
         $attendance   = $student->attendance ?? 100;
 
         $convertGpaToPercentage = function ($gpa) {
@@ -198,15 +218,29 @@ class StudentController extends Controller
         $midtermPercent = $convertGpaToPercentage($umMidtermGpa);
         $finalPercent   = $convertGpaToPercentage($umFinalGpa);
 
+        // Calculate Weighted GPA Trend History
         $history = [];
         $groupedBySem = $subjects->groupBy(function ($item) {
             return $item->school_year . ' T' . $item->term;
         });
 
         foreach ($groupedBySem as $sem => $semSubjects) {
+            $semTotalUnits = 0;
+            $semTotalWeightedGrades = 0;
+
+            foreach ($semSubjects as $sub) {
+                $grade = (float) $sub->final_grade;
+                $units = (float) ($sub->units ?? 3);
+
+                if ($grade > 0) {
+                    $semTotalUnits += $units;
+                    $semTotalWeightedGrades += ($grade * $units);
+                }
+            }
+
             $history[] = [
                 'sem' => $sem,
-                'gpa' => round($semSubjects->avg('final_grade') ?? 2.0, 2),
+                'gpa' => $semTotalUnits > 0 ? round($semTotalWeightedGrades / $semTotalUnits, 2) : 2.00,
             ];
         }
 
@@ -253,17 +287,7 @@ class StudentController extends Controller
             $riskScore = round(0.05 + (($attendance / 100) * 0.10), 2);
         }
 
-        $isHighRisk = (
-            $riskScore >= $aiThreshold ||
-            $attendance < 75           ||
-            $umFinalGpa < 2.0          ||
-            $direction === 'declining' ||
-            $direction === 'volatile'
-        );
-
-        if ($isHighRisk && $riskScore < $aiThreshold) {
-            $riskScore = 0.85;
-        }
+        $isHighRisk = ($riskScore >= $aiThreshold);
 
         $keyFactors = [];
 
@@ -326,7 +350,7 @@ class StudentController extends Controller
         if ($isHighRisk && $student->program) {
             $bestSubject = $subjects
                 ->filter(fn($s) => $s->final_grade !== null)
-                ->sortBy('final_grade')
+                ->sortByDesc('final_grade')
                 ->first();
 
             $bestSubjectName = $bestSubject
@@ -377,7 +401,7 @@ class StudentController extends Controller
         return response()->json([
             'student_id'         => $student->id,
             'name'               => $student->first_name . ' ' . $student->last_name,
-            'current_program'    => $student->program->name       ?? 'Unassigned',
+            'current_program'    => $student->program->name     ?? 'Unassigned',
             'current_department' => $student->program->department ?? 'Unassigned',
 
             'metrics_evaluated' => [
