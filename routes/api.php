@@ -21,7 +21,6 @@ Route::get('/dashboard-stats', [DashboardController::class, 'index']);
 Route::get('/weather/{city}', [WeatherController::class, 'getWeather']);
 
 
-
 // --- PROTECTED ROUTES ---
 Route::middleware('auth:sanctum')->group(function () {
     
@@ -43,11 +42,10 @@ Route::middleware('auth:sanctum')->group(function () {
     // 3. Student Module
     Route::get('/students', [StudentController::class, 'index']);
     Route::get('/students/{id}/predict-risk', [StudentController::class, 'predictDropoutRisk']);
+    Route::get('/students/{id}/attendance', [StudentController::class, 'attendanceLog']); // ← Single, clean route pointing to the working DB logic
+    Route::post('/students/{id}/grades', [StudentController::class, 'addGrade']); // ← NEW: enroll student into a subject + record grades
     Route::get('/students/{id}', [StudentController::class, 'show']);
 
-  
-   
-    
     // 4. Course Module
     Route::get('/courses', [CourseController::class, 'index']);
     
