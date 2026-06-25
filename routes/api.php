@@ -19,6 +19,7 @@ Route::post('/login', [AuthController::class, 'login'])->name('login');
 // --- PUBLIC ROUTES ---
 Route::get('/dashboard-stats', [DashboardController::class, 'index']);
 Route::get('/weather/{city}', [WeatherController::class, 'getWeather']);
+Route::post('/students/public', [StudentController::class, 'storePublic']);
 
 
 // --- PROTECTED ROUTES ---
