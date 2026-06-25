@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Student;
 use App\Models\Program;
+use App\Services\CsvStudentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\DB;
@@ -11,6 +12,12 @@ use Illuminate\Support\Facades\Cache;
 
 class StudentController extends Controller
 {
+    private CsvStudentService $csvService;
+
+    public function __construct(CsvStudentService $csvService)
+    {
+        $this->csvService = $csvService;
+    }
     public function index(Request $request)
     {
         $query = Student::with('program');
@@ -25,6 +32,83 @@ class StudentController extends Controller
         }
 
         return response()->json($query->paginate(15));
+    }
+
+    public function store(Request $request)
+    {
+        $validated = $request->validate([
+            'first_name' => 'required|string|max:255',
+            'last_name' => 'required|string|max:255',
+            'email' => 'required|email|unique:students,email',
+            'gender' => 'required|in:Male,Female',
+            'date_of_birth' => 'required|date',
+            'year_level' => 'required|string|max:50',
+            'contact_no' => 'required|string|max:50',
+            'address' => 'required|string',
+            'program_id' => 'required|exists:programs,id',
+            'enrollment_date' => 'required|date',
+            'gpa' => 'nullable|numeric|min:0|max:5',
+            'attendance' => 'nullable|integer|min:0|max:100',
+            'scholarship_status' => 'nullable|boolean',
+            'has_unpaid_fees' => 'nullable|boolean',
+        ]);
+
+        $validated['student_id'] = Student::max('id') + 1;
+
+        $student = Student::create($validated);
+
+        $csvRow = $this->buildCsvRow($validated);
+        $this->csvService->append($csvRow);
+
+        Cache::forget('dashboard_stats');
+
+        return response()->json([
+            'message' => 'Student created and appended to data.csv.',
+            'student' => $student,
+        ], 201);
+    }
+
+    private function buildCsvRow(array $data): array
+    {
+        return [
+            'Marital status' => $data['marital_status'] ?? '1',
+            'Application mode' => $data['application_mode'] ?? '1',
+            'Application order' => $data['application_order'] ?? '1',
+            'Course' => $data['program_id'] ?? '',
+            'Daytime/evening attendance' => $data['daytime_attendance'] ?? '1',
+            'Previous qualification' => $data['previous_qualification'] ?? '1',
+            'Previous qualification (grade)' => $data['previous_qualification_grade'] ?? '120',
+            'Nacionality' => $data['nationality'] ?? '1',
+            'Mother\'s qualification' => $data['mother_qualification'] ?? '1',
+            'Father\'s qualification' => $data['father_qualification'] ?? '1',
+            'Mother\'s occupation' => $data['mother_occupation'] ?? '1',
+            'Father\'s occupation' => $data['father_occupation'] ?? '1',
+            'Admission grade' => $data['admission_grade'] ?? '120.0',
+            'Displaced' => $data['displaced'] ?? '0',
+            'Educational special needs' => $data['educational_special_needs'] ?? '0',
+            'Debtor' => $data['debtor'] ?? '0',
+            'Tuition fees up to date' => $data['tuition_fees_up_to_date'] ?? '1',
+            'Gender' => $data['gender'] ?? '0',
+            'Scholarship holder' => $data['scholarship_holder'] ?? '0',
+            'Age at enrollment' => $data['age_at_enrollment'] ?? '18',
+            'International' => $data['international'] ?? '0',
+            'Curricular units 1st sem (credited)' => $data['cu_1st_credited'] ?? '0',
+            'Curricular units 1st sem (enrolled)' => $data['cu_1st_enrolled'] ?? '0',
+            'Curricular units 1st sem (evaluations)' => $data['cu_1st_evaluations'] ?? '0',
+            'Curricular units 1st sem (approved)' => $data['cu_1st_approved'] ?? '0',
+            'Curricular units 1st sem (grade)' => $data['cu_1st_grade'] ?? '0',
+            'Curricular units 1st sem (without evaluations)' => $data['cu_1st_without_evaluations'] ?? '0',
+            'Curricular units 2nd sem (credited)' => $data['cu_2nd_credited'] ?? '0',
+            'Curricular units 2nd sem (enrolled)' => $data['cu_2nd_enrolled'] ?? '0',
+            'Curricular units 2nd sem (evaluations)' => $data['cu_2nd_evaluations'] ?? '0',
+            'Curricular units 2nd sem (approved)' => $data['cu_2nd_approved'] ?? '0',
+            'Curricular units 2nd sem (grade)' => $data['cu_2nd_grade'] ?? '0',
+            'Curricular units 2nd sem (without evaluations)' => $data['cu_2nd_without_evaluations'] ?? '0',
+            'Unemployment rate' => $data['unemployment_rate'] ?? '0.0',
+            'Inflation rate' => $data['inflation_rate'] ?? '0.0',
+            'GDP' => $data['gdp'] ?? '0.0',
+            'Target' => $data['target'] ?? 'Enrolled',
+        ];
     }
 
     public function show($id)
