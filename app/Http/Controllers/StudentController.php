@@ -34,38 +34,52 @@ class StudentController extends Controller
         return response()->json($query->paginate(15));
     }
 
-    public function store(Request $request)
-    {
-        $validated = $request->validate([
-            'first_name' => 'required|string|max:255',
-            'last_name' => 'required|string|max:255',
-            'email' => 'required|email|unique:students,email',
-            'gender' => 'required|in:Male,Female',
-            'date_of_birth' => 'required|date',
-            'year_level' => 'required|string|max:50',
-            'contact_no' => 'required|string|max:50',
-            'address' => 'required|string',
-            'program_id' => 'required|exists:programs,id',
-            'enrollment_date' => 'required|date',
-            'gpa' => 'nullable|numeric|min:0|max:5',
-            'attendance' => 'nullable|integer|min:0|max:100',
-            'scholarship_status' => 'nullable|boolean',
-            'has_unpaid_fees' => 'nullable|boolean',
-        ]);
+   public function store(Request $request)
+{
+    // 1. Validate all fields including student_id and emergency contacts
+    $validated = $request->validate([
+        'student_id'             => 'required|string|unique:students,student_id', // Accepts form text input & checks duplicates
+        'first_name'             => 'required|string|max:255',
+        'last_name'              => 'required|string|max:255',
+        'email'                  => 'required|email|unique:students,email',
+        'gender'                 => 'required|in:Male,Female,Other',
+        'date_of_birth'          => 'required|date',
+        'year_level'             => 'required|string|max:50',
+        'contact_no'             => 'required|string|max:50',
+        'address'                => 'required|string',
+        'program_id'             => 'required|exists:programs,id',
+        'enrollment_date'        => 'required|date',
+        'emergency_contact_name' => 'nullable|string|max:255', // Whitelists field for database entry
+        'emergency_contact_no'   => 'nullable|string|max:50',  // Whitelists field for database entry
+        'gpa'                    => 'nullable|numeric|min:0|max:5',
+        'attendance'             => 'nullable|integer|min:0|max:100',
+        'scholarship_status'     => 'nullable|boolean',
+        'has_unpaid_fees'        => 'nullable|boolean',
+    ]);
 
-        $validated['student_id'] = Student::max('id') + 1;
+    // 2. Save record securely to your SQL Database
+    $student = Student::create($validated);
 
-        $student = Student::create($validated);
-
+    // 3. Catch file access issues so a locked CSV won't cause a 500 API crash
+    try {
         $csvRow = $this->buildCsvRow($validated);
         $this->csvService->append($csvRow);
+    } catch (\Exception $e) {
+        // Fallback: Logs the file error safely behind the scenes without disrupting the user
+        \Log::error('CSV sync error dropped on row append execution: ' . $e->getMessage());
+    }
 
-        Cache::forget('dashboard_stats');
+    Cache::forget('dashboard_stats');
 
-        return response()->json([
-            'message' => 'Student created and appended to data.csv.',
-            'student' => $student,
-        ], 201);
+    return response()->json([
+        'message' => 'Student record compiled and saved successfully.',
+        'student' => $student,
+    ], 201);
+}
+
+    public function storePublic(Request $request)
+    {
+        return $this->store($request);
     }
 
     private function buildCsvRow(array $data): array

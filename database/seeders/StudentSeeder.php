@@ -3,7 +3,6 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
-use App\Models\Student;
 use App\Models\Program;
 use Illuminate\Support\Facades\DB;
 
@@ -11,6 +10,7 @@ class StudentSeeder extends Seeder
 {
     public function run(): void
     {
+        // 1. Check if Program data exists to map relationships
         $programs = Program::all()->keyBy('code');
 
         if ($programs->isEmpty()) {
@@ -18,74 +18,65 @@ class StudentSeeder extends Seeder
             return;
         }
 
-        $programCodes = $programs->keys()->toArray();
-        $yearLevels   = ['1st Year', '2nd Year', '3rd Year', '4th Year'];
-        $genders      = ['Male', 'Female'];
+        // 2. Define the path to your CSV file
+        $csvPath = 'C:/Users/Acer/Desktop/School_FilesFolder/Business ANalythiscs/Enrollment-System-Backend/data.csv'; //Insert the path location to your data.csv
 
-        $firstNames = ['Maria', 'Juan', 'Jose', 'Ana', 'Carlo', 'Liza', 'Mark', 'Nina', 'Paolo', 'Rosa', 'Luis', 'Grace', 'Kevin', 'Ella', 'Ryan', 'Faith'];
-        $lastNames  = ['Santos', 'Reyes', 'Cruz', 'Bautista', 'Garcia', 'Mendoza', 'Torres', 'Flores', 'Rivera', 'Ramos', 'Gomez', 'Diaz', 'Morales'];
-
-        $students = [];
-        $year     = now()->year;
-
-        // UM Tagum Official Discrete Passing Grades for Overall GPA
-        $goodGrades = [2.5, 3.0, 3.5, 4.0];
-        $poorGrades = [1.0, 2.0];
-
-        for ($i = 1; $i <= 1000; $i++) {
-            $firstName    = $firstNames[array_rand($firstNames)];
-            $lastName     = $lastNames[array_rand($lastNames)];
-            $gender       = $genders[array_rand($genders)];
-            $yearLevel    = $yearLevels[array_rand($yearLevels)];
-            $programCode  = $programCodes[array_rand($programCodes)];
-            $program      = $programs[$programCode];
-
-            $scholarship = rand(1, 100) <= 15; 
-            $unpaidFees  = rand(1, 100) <= 12;   
-
-            if ($scholarship) {
-                $unpaidFees = rand(1, 100) <= 1; 
-            }
-
-            // Consistent Higher-is-better discrete scale
-            $isStruggling = rand(1, 10) > 7; 
-
-            if ($isStruggling) {
-                $gpa = $poorGrades[array_rand($poorGrades)];
-                $attendance = rand(40, 74);            
-                if (!$scholarship && rand(1,10) <= 3) $unpaidFees = true; 
-            } else {
-                $gpa = $goodGrades[array_rand($goodGrades)]; 
-                $attendance = rand(80, 100);           
-            }
-
-            $students[] = [
-                'student_id'              => $year . '-' . str_pad($i, 4, '0', STR_PAD_LEFT),
-                'first_name'              => $firstName,
-                'last_name'               => $lastName,
-                'email'                   => strtolower($firstName . '.' . $lastName . $i . '@um.edu.ph'),
-                'gender'                  => $gender,
-                'date_of_birth'           => now()->subYears(rand(18, 25))->subDays(rand(0, 365))->toDateString(),
-                'year_level'              => $yearLevel,
-                'contact_no'              => '09' . rand(100000000, 999999999),
-                'address'                 => 'Tagum City, Davao del Norte',
-                'emergency_contact_name'  => $firstNames[array_rand($firstNames)] . ' ' . $lastName,
-                'emergency_contact_no'    => '09' . rand(100000000, 999999999),
-                'program_id'              => $program->id,
-                'enrollment_date'         => now()->subMonths(rand(1, 36))->toDateString(),
-                'gpa'                     => $gpa,
-                'attendance'              => $attendance,
-                'scholarship_status'      => $scholarship,
-                'has_unpaid_fees'         => $unpaidFees,
-                'created_at'              => now(),
-                'updated_at'              => now(),
-            ];
+        if (!file_exists($csvPath)) {
+            $this->command->error("CSV file not found at: {$csvPath}");
+            return;
         }
 
+        // 3. Open and read the CSV file
+        $students = [];
+        if (($handle = fopen($csvPath, 'r')) !== FALSE) {
+            
+            // Skip the header row (e.g., student_id, first_name, program_code...)
+            $header = fgetcsv($handle, 1000, ','); 
+
+            while (($data = fgetcsv($handle, 1000, ',')) !== FALSE) {
+                
+                // Assuming your CSV has a column for the Program Code (e.g., 'BSIT', 'BSBA')
+                $programCode = $data[11]; // <-- CHANGE THIS INDEX to match your CSV column
+                $program = $programs->get($programCode);
+
+                // Skip this row or handle it if the program code doesn't exist in the DB
+                if (!$program) {
+                    $this->command->warn("Program code '{$programCode}' not found. Skipping student.");
+                    continue;
+                }
+
+                // Map your CSV columns directly to your database table columns
+                // $data[0] is the first column, $data[1] is the second, etc.
+                $students[] = [
+                    'student_id'             => $data[0],
+                    'first_name'             => $data[1],
+                    'last_name'              => $data[2],
+                    'email'                  => $data[3],
+                    'gender'                 => $data[4],
+                    'date_of_birth'          => $data[5],
+                    'year_level'             => $data[6],
+                    'contact_no'             => $data[7],
+                    'address'                => $data[8],
+                    'emergency_contact_name' => $data[9],
+                    'emergency_contact_no'   => $data[10],
+                    'program_id'             => $program->id, // Uses the ID looked up from the code
+                    'enrollment_date'        => $data[12],
+                    'gpa'                    => (float)$data[13],
+                    'attendance'             => (int)$data[14],
+                    'scholarship_status'     => filter_var($data[15], FILTER_VALIDATE_BOOLEAN),
+                    'has_unpaid_fees'        => filter_var($data[16], FILTER_VALIDATE_BOOLEAN),
+                    'created_at'             => now(),
+                    'updated_at'             => now(),
+                ];
+            }
+            fclose($handle);
+        }
+
+        // 4. Insert into the database in chunks for performance
         foreach (array_chunk($students, 50) as $chunk) {
             DB::table('students')->insert($chunk);
         }
         
-        $this->command->info('Successfully seeded 1000 discrete, correct-scale student records.');
+        $this->command->info('Successfully seeded student records from CSV.');
     }
 }

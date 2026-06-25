@@ -117,6 +117,54 @@
                             </a>
                         </li>
                     </ul>
+
+                    <div class="mt-8 p-6 rounded-2xl border border-[#e6e5e2] dark:border-[#3e3e3a] bg-[#fdfaf9] dark:bg-[#111110]">
+                        <h2 class="text-lg font-semibold mb-4">Create Student</h2>
+                        <form id="student-create-form" class="grid gap-3 text-sm" autocomplete="off">
+                            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                <input name="first_name" type="text" placeholder="First name" required class="w-full rounded-md border border-[#d5d4d0] bg-white px-3 py-2 text-sm" />
+                                <input name="last_name" type="text" placeholder="Last name" required class="w-full rounded-md border border-[#d5d4d0] bg-white px-3 py-2 text-sm" />
+                            </div>
+                            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                <input name="email" type="email" placeholder="Email" required class="w-full rounded-md border border-[#d5d4d0] bg-white px-3 py-2 text-sm" />
+                                <select name="gender" required class="w-full rounded-md border border-[#d5d4d0] bg-white px-3 py-2 text-sm">
+                                    <option value="">Gender</option>
+                                    <option value="Male">Male</option>
+                                    <option value="Female">Female</option>
+                                </select>
+                            </div>
+                            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                <input name="date_of_birth" type="date" required class="w-full rounded-md border border-[#d5d4d0] bg-white px-3 py-2 text-sm" />
+                                <input name="year_level" type="text" placeholder="Year level" required class="w-full rounded-md border border-[#d5d4d0] bg-white px-3 py-2 text-sm" />
+                            </div>
+                            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                <input name="contact_no" type="text" placeholder="Contact number" required class="w-full rounded-md border border-[#d5d4d0] bg-white px-3 py-2 text-sm" />
+                                <input name="address" type="text" placeholder="Address" required class="w-full rounded-md border border-[#d5d4d0] bg-white px-3 py-2 text-sm" />
+                            </div>
+                            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                <input name="program_id" type="number" placeholder="Program ID" value="1" required class="w-full rounded-md border border-[#d5d4d0] bg-white px-3 py-2 text-sm" />
+                                <input name="enrollment_date" type="date" required class="w-full rounded-md border border-[#d5d4d0] bg-white px-3 py-2 text-sm" />
+                            </div>
+                            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                <input name="gpa" type="number" step="0.01" placeholder="GPA" class="w-full rounded-md border border-[#d5d4d0] bg-white px-3 py-2 text-sm" />
+                                <input name="attendance" type="number" min="0" max="100" placeholder="Attendance" class="w-full rounded-md border border-[#d5d4d0] bg-white px-3 py-2 text-sm" />
+                            </div>
+                            <div class="flex flex-wrap gap-3 items-center text-sm">
+                                <label class="inline-flex items-center gap-2">
+                                    <input name="scholarship_status" type="checkbox" class="rounded border-[#d5d4d0] text-[#f53003]" />
+                                    Scholarship holder
+                                </label>
+                                <label class="inline-flex items-center gap-2">
+                                    <input name="has_unpaid_fees" type="checkbox" class="rounded border-[#d5d4d0] text-[#f53003]" />
+                                    Has unpaid fees
+                                </label>
+                            </div>
+                            <div class="grid gap-3 sm:grid-cols-2">
+                                <button type="submit" class="inline-flex justify-center rounded-md bg-[#1b1b18] px-4 py-2 text-sm font-semibold text-white hover:bg-[#2d2d2a]">Create student</button>
+                                <div id="student-form-status" class="text-sm text-[#5B5A56] mt-2 sm:mt-0"></div>
+                            </div>
+                        </form>
+                    </div>
                 </div>
                 <div class="bg-[#fff2f2] dark:bg-[#1D0002] relative lg:-ml-px -mb-px lg:mb-0 rounded-t-lg lg:rounded-t-none lg:rounded-r-lg aspect-[335/376] lg:aspect-auto w-full lg:w-[438px] shrink-0 overflow-hidden">
                     {{-- Laravel Logo --}}
