@@ -41,6 +41,7 @@ Route::middleware('auth:sanctum')->group(function () {
     
     // 3. Student Module
     Route::get('/students', [StudentController::class, 'index']);
+    Route::post('/students', [StudentController::class, 'store']);
     Route::get('/students/{id}/predict-risk', [StudentController::class, 'predictDropoutRisk']);
     Route::get('/students/{id}/attendance', [StudentController::class, 'attendanceLog']); // ← Single, clean route pointing to the working DB logic
     Route::post('/students/{id}/grades', [StudentController::class, 'addGrade']); // ← NEW: enroll student into a subject + record grades
